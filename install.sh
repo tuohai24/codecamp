@@ -10,7 +10,7 @@
 #                    curl -fsSL <仓库地址>/raw/main/install.sh | bash -s -- --port 8080
 set -euo pipefail
 
-REPO_URL="${CODECAMP_REPO:-__REPO_URL__}"
+REPO_URL="${CODECAMP_REPO:-https://github.com/tuohai24/codecamp}"
 TARGET="${CODECAMP_DIR:-$HOME/codecamp}"
 
 # ---------- 找到项目目录 ----------

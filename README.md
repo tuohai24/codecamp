@@ -13,7 +13,7 @@
 **Linux / macOS**
 
 ```bash
-git clone __REPO_URL__ codecamp
+git clone https://github.com/tuohai24/codecamp codecamp
 cd codecamp
 ./install.sh
 ```
@@ -21,13 +21,13 @@ cd codecamp
 也可以不手动 clone，一条命令装到 `~/codecamp`：
 
 ```bash
-curl -fsSL __RAW_URL__/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tuohai24/codecamp/main/install.sh | bash
 ```
 
 **Windows（PowerShell）**
 
 ```powershell
-git clone __REPO_URL__ codecamp
+git clone https://github.com/tuohai24/codecamp codecamp
 cd codecamp
 .\install.ps1
 ```

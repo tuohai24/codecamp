@@ -17,7 +17,7 @@ try {
   $OutputEncoding = [System.Text.Encoding]::UTF8
 } catch {}
 
-$repo = if ($env:CODECAMP_REPO) { $env:CODECAMP_REPO } else { '__REPO_URL__' }
+$repo = if ($env:CODECAMP_REPO) { $env:CODECAMP_REPO } else { 'https://github.com/tuohai24/codecamp' }
 $target = if ($env:CODECAMP_DIR) { $env:CODECAMP_DIR } else { Join-Path $HOME 'codecamp' }
 
 $root = $PSScriptRoot
