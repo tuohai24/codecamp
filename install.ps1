@@ -304,6 +304,15 @@ if (-not $node) {
 }
 
 Write-Host "  Node.js v$($node.Version)（$($node.Exe)）"
+
+# 不带命令时默认 install（只给了 --port 8080 之类的参数也一样）
+$knownCommands = @('install', 'update', 'uninstall', 'start', 'stop', 'restart', 'status', 'logs', 'passwd', 'help')
+$hasCmd = $false
+foreach ($a in $passArgs) {
+  if ($knownCommands -contains $a) { $hasCmd = $true; break }
+}
+if (-not $hasCmd) { $passArgs = @('install') + $passArgs }
+
 Write-Host "安装目录：$root"
 
 & $node.Exe (Join-Path $root 'scripts\setup.js') @passArgs

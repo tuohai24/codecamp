@@ -439,5 +439,19 @@ say "CodeCamp 运行环境检查"
 say "----------------------------------------"
 ensure_node
 
+# 不带命令时默认 install（只给了 --port 8080 之类的参数也一样）
+HAS_CMD=0
+for a in ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}; do
+  case "$a" in
+    install | update | uninstall | start | stop | restart | status | logs | passwd | help)
+      HAS_CMD=1
+      break
+      ;;
+  esac
+done
+if [ "$HAS_CMD" = 0 ]; then
+  PASS_ARGS=("install" ${PASS_ARGS[@]+"${PASS_ARGS[@]}"})
+fi
+
 say "安装目录：$ROOT"
 exec "$NODE_BIN" "$ROOT/scripts/setup.js" ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}
