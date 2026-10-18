@@ -40,6 +40,27 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 安装脚本只做四件事：检查 Node.js ≥ 22.5 → 建好 `data/` → 首次启动自动初始化数据库 → 后台拉起服务并打印访问地址。项目零依赖，**不需要 `npm install`**。
 
+### 缺依赖时怎么办（脚本会自动装）
+
+脚本会先自检环境，**发现缺东西会直接问你要不要装**，答 Y 就自动搞定，不用自己去下安装包：
+
+| 情况 | 脚本的处理 |
+|---|---|
+| 没有 Node.js | 询问后自动下载官方 Node 22（约 25–30 MB），解压到 `~/.codecamp/node`（Windows 为 `%USERPROFILE%\.codecamp\node`），**不覆盖、不干扰系统里已有的 Node** |
+| Node 版本太低（如 v18） | 同上，另装一份 Node 22 并用它启动服务；系统里那份保持原样 |
+| 没有 git | 不逼你装 git，自动改用 GitHub 源码压缩包（`codeload`）下载解压 |
+| 没有 curl / wget | 打印手动下载地址，明确告诉你下哪个包 |
+| 网络连不上 nodejs.org | 自动切换 `npmmirror.com` 国内镜像 |
+
+相关参数：
+
+```bash
+./install.sh --yes          # 无人值守：缺什么直接装，不询问（CI / 批量部署用）
+./install.sh --no-install   # 只检查不安装：缺依赖就报错退出，并给出手动安装命令
+```
+
+也可以用环境变量控制：`CODECAMP_AUTO_INSTALL=1` 等价于 `--yes`，`CODECAMP_NODE_HOME=/opt/node` 指定自动安装的 Node 放哪。
+
 ### 安装之后
 
 ```bash
@@ -54,6 +75,9 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 Windows 把 `./install.sh` 换成 `.\install.ps1`，子命令与参数完全一致。所有命令也可以用 `node scripts/setup.js <命令>` 运行。
 
+> 自动装的那份 Node 在 `~/.codecamp/node`（Windows 为 `%USERPROFILE%\.codecamp\node`），和系统 Node 互不影响；
+> `uninstall` 不会删它（不属于本项目的安装目录），不再需要时手动删掉这个目录即可。
+
 常用参数：
 
 | 参数 | 说明 |
@@ -62,6 +86,8 @@ Windows 把 `./install.sh` 换成 `.\install.ps1`，子命令与参数完全一�
 | `--host 127.0.0.1` | 只监听本机（默认 `0.0.0.0`，对外提供服务） |
 | `--foreground` | 前台运行，`Ctrl+C` 停止，适合调试或容器 |
 | `--no-start` | 只更新代码，不重启（配合 `update`） |
+| `--yes` | 缺依赖时自动安装，不再逐项询问 |
+| `--no-install` | 只检查依赖，不自动安装 |
 
 ### 方式二：直接运行
 
@@ -215,7 +241,7 @@ sudo systemctl daemon-reload && sudo systemctl enable --now codecamp
 ## 目录结构
 
 ```
-install.sh                 一键安装 / 更新 / 卸载（Linux、macOS、Windows Git Bash）
+install.sh                 一键安装 / 更新 / 卸载（Linux、macOS、Windows Git Bash），缺依赖会询问后自动安装
 install.ps1                同上，Windows PowerShell 版
 scripts/setup.js           安装器实现（install / update / uninstall / start / stop / status / logs / passwd）
 scripts/fetch-scratch-assets.js  批量同步官方素材到本地镜像
