@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#5b5bd6" />
+<title>CodeCamp · 少儿编程学堂</title>
+<meta name="description" content="Scratch + Python 在线创作、作品社区与作业管理平台" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%235b5bd6'/><text y='72' x='50' font-size='58' text-anchor='middle'>🐱</text></svg>" />
+<link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+<header class="topbar" id="topbar">
+  <div class="container-wide">
+    <button class="nav-toggle" id="nav-toggle" aria-label="打开菜单" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+    <a class="brand" href="#/">
+      <span class="logo">CC</span>
+      <span id="site-name" class="brand-name">CodeCamp</span>
+    </a>
+    <nav class="nav" id="nav">
+      <a href="#/" data-nav="/">首页</a>
+      <a href="#/explore" data-nav="/explore">作品社区</a>
+      <a href="#/explore?type=scratch" data-nav="/explore?type=scratch">Scratch</a>
+      <a href="#/explore?type=python" data-nav="/explore?type=python">Python</a>
+      <div class="nav-search">
+        <input id="global-search-m" type="search" placeholder="搜索作品、作者…" enterkeyhint="search" />
+      </div>
+    </nav>
+    <div class="spacer"></div>
+    <div class="searchbox"><input id="global-search" type="text" placeholder="搜索作品..." /></div>
+    <a class="btn primary sm" href="/studio/scratch.html" id="btn-create">＋ 创作</a>
+    <div id="user-area"></div>
+  </div>
+</header>
+<div class="nav-scrim" id="nav-scrim"></div>
+<main id="view"></main>
+<div id="toasts"></div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

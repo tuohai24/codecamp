@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#5b5bd6" />
+<title>Python 创作 · CodeCamp</title>
+<link rel="stylesheet" href="/css/app.css" />
+<link rel="stylesheet" href="/vendor/cm/codemirror.css" />
+<link rel="stylesheet" href="/vendor/cm/theme.css" />
+</head>
+<body class="studio">
+<div class="studio-top">
+  <a class="brand studio-brand" href="/" title="返回首页"><span class="logo">CC</span></a>
+  <input class="name-input" id="title" value="未命名作品" maxlength="40" aria-label="作品名称" />
+  <span class="pill" id="save-state">已保存</span>
+  <span class="pill studio-badge" id="py-info">🐍 Python</span>
+  <div class="grow"></div>
+  <button class="btn primary sm" id="btn-run" title="运行"><span class="t">▶ 运行</span><span class="i">▶</span></button>
+  <button class="btn ghost sm" id="btn-save" title="保存"><span class="t">保存</span><span class="i">💾</span></button>
+  <button class="btn sm" id="btn-publish" title="发布"><span class="t">发布</span><span class="i">🚀</span></button>
+  <button class="btn ghost sm" id="btn-share" title="分享"><span class="t">分享</span><span class="i">🔗</span></button>
+  <a class="btn ghost sm studio-close" href="/" title="返回">✕</a>
+</div>
+
+<div class="py-split">
+  <div class="py-editor-pane"><div id="editor"></div></div>
+  <aside class="output-pane" id="output-pane">
+    <div class="tab-strip" style="margin:0">
+      <button data-tab="console" class="active">控制台</button>
+      <button data-tab="canvas">图形输出</button>
+      <button data-tab="deps">依赖管理</button>
+      <button data-tab="tips">示例</button>
+    </div>
+    <div id="pane-console" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="console" id="console">点击「运行」查看输出结果…</div>
+    </div>
+    <div id="pane-canvas" class="canvas-out" style="display:none;flex:1;border-top:none">
+      <div class="tiny muted">turtle 绘图或 matplotlib 生成的图片会显示在这里</div>
+    </div>
+    <div id="pane-deps" style="display:none;flex:1;overflow:auto;padding:14px">
+      <div class="field" style="margin-bottom:10px">
+        <label>安装第三方库</label>
+        <div class="row"><input id="pkg-name" placeholder="例如 requests、cowsay、matplotlib" /><button class="btn primary sm" id="btn-install">安装</button></div>
+        <div class="help">会真实执行 pip install；可同时安装多个，用空格分隔</div>
+      </div>
+      <div class="tiny muted" style="margin:10px 0 6px">已安装（<span id="pkg-count">0</span>）</div>
+      <div id="pkg-list" class="row wrap" style="gap:6px"></div>
+      <pre id="pip-log" class="console" style="display:none;max-height:200px;margin-top:12px;border-radius:8px"></pre>
+    </div>
+    <div id="pane-tips" style="display:none;flex:1;overflow:auto;padding:14px">
+      <div class="tiny muted" style="margin-bottom:10px">点击可直接载入到编辑器</div>
+      <div class="col" id="samples"></div>
+    </div>
+  </aside>
+</div>
+
+<script src="/vendor/cm/codemirror.js"></script>
+<script src="/vendor/cm/python.js"></script>
+<script src="/vendor/cm/closebrackets.js"></script>
+<script type="module" src="/js/studio/python.js"></script>
+</body>
+</html>

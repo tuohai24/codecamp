@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#5b5bd6" />
+<title>Scratch 创作 · CodeCamp</title>
+<link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="studio">
+<div class="studio-top">
+  <a class="brand studio-brand" href="/" title="返回首页"><span class="logo">CC</span></a>
+  <input class="name-input" id="title" value="未命名作品" maxlength="40" aria-label="作品名称" />
+  <span class="pill" id="save-state">加载中…</span>
+  <span class="pill brand studio-badge">官方 Scratch 3 编辑器</span>
+  <div class="grow"></div>
+  <button class="btn primary sm" id="btn-save" title="保存"><span class="t">保存</span><span class="i">💾</span></button>
+  <button class="btn sm" id="btn-publish" title="发布"><span class="t">发布</span><span class="i">🚀</span></button>
+  <button class="btn ghost sm" id="btn-share" title="分享"><span class="t">分享</span><span class="i">🔗</span></button>
+  <a class="btn ghost sm studio-close" href="/" title="返回">✕</a>
+</div>
+
+<div class="frame-wrap">
+  <iframe id="gui" title="Scratch 编辑器" allow="microphone; camera; autoplay; clipboard-write; fullscreen"></iframe>
+  <div class="frame-mask" id="frame-mask">
+    <div class="spinner"></div>
+    <div>正在加载官方 Scratch 编辑器…</div>
+  </div>
+</div>
+
+<script type="module" src="/js/studio/scratch.js"></script>
+</body>
+</html>

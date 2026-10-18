@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Scratch 编辑器</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #e9f1fc; }
+      #root { height: 100%; }
+
+      /* ---------- 手机 / 平板上的一屏一视图 ----------
+         官方 GUI 是固定三栏布局（编辑区 598px + 舞台区 426px），窄屏下舞台会被挤到屏幕外。
+         这里把两栏改成「叠在一起的两个视图」，用底部工具条切换，Blockly 与舞台的尺寸保持不变。 */
+      #cc-mbar { display: none; }
+      html.cc-m #root { height: calc(100% - 46px); }
+      html.cc-m #cc-mbar {
+        display: flex; position: fixed; left: 0; right: 0; bottom: 0; height: 46px;
+        align-items: center; gap: 6px; padding: 0 8px env(safe-area-inset-bottom, 0);
+        background: #fff; border-top: 1px solid #e6e7f0; z-index: 999;
+        font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      #cc-mbar button {
+        flex: 0 0 auto; height: 34px; padding: 0 12px; border-radius: 9px; border: 1px solid transparent;
+        background: #f0f1f8; color: #171a2e; font-size: 13px; font-weight: 600; display: inline-flex;
+        align-items: center; gap: 5px; cursor: pointer;
+      }
+      #cc-mbar button.on { background: #eef0ff; color: #4a45c4; border-color: #c9ccf5; }
+      #cc-mbar .sp { flex: 1; }
+      #cc-mbar button.act { width: 40px; justify-content: center; padding: 0; font-size: 15px; }
+      #cc-mbar button.flag { background: #e9f9ef; color: #16a34a; }
+
+      html.cc-m [class*="gui_flex-wrapper"] { display: block; position: relative; height: 100%; }
+      html.cc-m [class*="gui_editor-wrapper"] { width: 100% !important; min-width: 0 !important; height: 100% !important; }
+      html.cc-m [class*="gui_stage-and-target-wrapper"] {
+        position: absolute; inset: 0; width: 100% !important; z-index: 100;
+        background: #e9f1fc; overflow: auto;
+      }
+      html.cc-m[data-view="blocks"] [class*="gui_stage-and-target-wrapper"] {
+        visibility: hidden; pointer-events: none;
+      }
+      /* 积木区的扩展按钮在窄屏会飘到舞台视图上，直接藏掉 */
+      html.cc-m [class*="gui_extension-button-container"] { display: none !important; }
+      html.cc-m [class*="stage-wrapper_stage-wrapper"] { width: 100% !important; }
+      html.cc-m [class*="gui_target-wrapper"] { width: 100% !important; }
+      /* 舞台本体由 JS 按可用空间算好像素尺寸（见 host.js fitStage） */
+      html.cc-m [class*="stage_stage_"] canvas { width: 100% !important; height: 100% !important; }
+      html.cc-m [class*="stage-header_stage-header-wrapper"] { display: none !important; }
+      /* 横屏：舞台放左边，角色面板放右边，避免舞台被压得太小 */
+      @media (orientation: landscape) and (max-height: 540px) {
+        html.cc-m[data-view="stage"] [class*="gui_stage-and-target-wrapper"] {
+          flex-direction: row; align-items: stretch; gap: 6px; padding: 6px;
+        }
+        html.cc-m [class*="gui_target-wrapper"] { flex: 0 0 396px !important; width: 396px !important; }
+        html.cc-m [class*="stage-wrapper_stage-wrapper"] { flex: 1 1 auto !important; }
+      }
+      /* 手机上减小舞台上下留白，把空间留给角色面板 */
+      html.cc-m [class*="stage-wrapper_stage-wrapper"] { padding: 4px 4px 0 !important; }
+      html.cc-m [class*="stage-header_stage-header-wrapper"] { min-height: 40px; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="cc-mbar" hidden>
+      <button type="button" data-view="stage">🎬 舞台</button>
+      <button type="button" data-view="blocks">🧩 积木</button>
+      <span class="sp"></span>
+      <button type="button" class="act flag" data-act="flag" title="运行">🏳</button>
+      <button type="button" class="act" data-act="stop" title="停止">⏹</button>
+    </div>
+
+    <script>
+      // 官方 GUI 把角色库 / 背景库 / 声音库的数据直接内联在构建产物里（JSON.parse 的数组字面量），
+      // 这里留住这些数组的引用，稍后把站内素材合并进去，官方库界面即可直接显示。
+      (function () {
+        window.__ccLibArrays = { sprites: null, backdrops: null, sounds: null };
+        window.__ccLibIds = new Set();
+        // 官方库条目缩略图直接按 CDN 地址拼 URL（见 scratch-gui 构建中的 __ccAssetURL 补丁）。
+        // 官方素材在境内被 SNI 阻断，统一改走本站接口：本地镜像优先，未缓存则由服务端回源取回。
+        window.__ccAssetURL = function (md5ext) {
+          var name = String(md5ext || '');
+          if (!name) return '';
+          return '/api/scratch/asset/' + name;
+        };
+        var rawParse = JSON.parse;
+        JSON.parse = function (text) {
+          var value = rawParse.apply(JSON, arguments);
+          try {
+            if (
+              typeof text === 'string' &&
+              text.length > 20000 &&
+              Array.isArray(value) &&
+              value.length > 20 &&
+              value[0] &&
+              typeof value[0].name === 'string'
+            ) {
+              var first = value[0];
+              if (first.sampleCount !== undefined) window.__ccLibArrays.sounds = value;
+              else if (first.isStage !== undefined) window.__ccLibArrays.sprites = value;
+              else if (first.name === 'Arctic') window.__ccLibArrays.backdrops = value;
+            }
+          } catch (e) {}
+          return value;
+        };
+      })();
+    </script>
+    <script src="/vendor/react/react.production.min.js"></script>
+    <script src="/vendor/react/react-dom.production.min.js"></script>
+    <script>
+      // 官方 GUI 构建把 react / react-dom 作为外部依赖，按 UMD 约定挂到全局
+      window.react = window.React;
+      window['react-dom'] = window.ReactDOM;
+    </script>
+    <script src="/vendor/scratch/scratch-vm.js"></script>
+    <script src="/vendor/scratch-gui/scratch-storage.js"></script>
+    <script src="/vendor/scratch-gui/scratch-gui.js"></script>
+    <script src="/vendor/scratch-gui/host.js?v=20261018b"></script>
+  </body>
+</html>

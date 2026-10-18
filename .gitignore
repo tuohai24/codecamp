@@ -1,0 +1,17 @@
+# 运行时产物
+node_modules/
+.runtime/
+*.log
+
+# 用户数据：数据库、上传素材、作品 sb3、Python 虚拟环境、备份
+data/
+
+# 编辑器 / 系统临时文件
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# WorkBuddy 工作区数据（记忆、本地配置）
+.workbuddy/
