@@ -30,14 +30,14 @@ export async function render(root) {
     <div class="section-title"><h2>两种创作方式</h2><span class="hint">点开就能用，作品自动保存</span></div>
     <div class="split-even home-modes">
       <a class="card" href="/studio/scratch.html" style="padding:22px;display:flex;gap:16px;align-items:center">
-        <div style="width:56px;height:56px;border-radius:16px;display:grid;place-items:center;font-size:28px;background:linear-gradient(135deg,#fff3e0,#ffe0b2)">🐱</div>
+        <div class="mode-ico" style="background:var(--amber-soft)">🐱</div>
         <div>
           <h3 style="font-size:16px;margin-bottom:4px">Scratch 图形化编程</h3>
           <div class="muted" style="font-size:13px">8 类积木、实时舞台预览，支持角色库与背景库素材</div>
         </div>
       </a>
       <a class="card" href="/studio/python.html" style="padding:22px;display:flex;gap:16px;align-items:center">
-        <div style="width:56px;height:56px;border-radius:16px;display:grid;place-items:center;font-size:28px;background:linear-gradient(135deg,#e0f7fa,#b2ebf2)">🐍</div>
+        <div class="mode-ico" style="background:var(--green-soft)">🐍</div>
         <div>
           <h3 style="font-size:16px;margin-bottom:4px">Python 代码编程</h3>
           <div class="muted" style="font-size:13px">服务端真实运行、turtle 绘图、一键安装第三方库</div>

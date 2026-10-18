@@ -1,5 +1,6 @@
 import { api, state, loadMe, loadSite, logout } from './api.js';
 import { avatarHtml, esc, modal, toast } from './ui.js';
+import { initTheme, themeButton } from './theme.js';
 import { render as renderHome } from './views/home.js';
 import { render as renderExplore } from './views/explore.js';
 import { render as renderProject } from './views/project.js';
@@ -11,6 +12,7 @@ import { render as renderUser } from './views/user.js';
 import { render as renderShare } from './views/share.js';
 
 const view = document.getElementById('view');
+window.__ccToast = toast;
 
 function parseHash() {
   let h = location.hash.slice(1) || '/';
@@ -26,38 +28,39 @@ const routes = [
   { re: /^\/s\/([A-Za-z0-9_-]{4,32})$/, fn: renderShare, keys: ['token'] },
   { re: /^\/login$/, fn: renderAuth },
   { re: /^\/me$/, fn: renderMe, auth: true },
+  { re: /^\/student$/, fn: renderMe, auth: true },
   { re: /^\/teacher$/, fn: renderTeacher, roles: ['teacher', 'admin'] },
   { re: /^\/admin$/, fn: renderAdmin, roles: ['admin'] },
   { re: /^\/u\/(\d+)$/, fn: renderUser, keys: ['author'] },
 ];
 
+const ROLE_HOME = { admin: '#/admin', teacher: '#/teacher', student: '#/student' };
+const ROLE_LABEL = { admin: '管理员', teacher: '教师', student: '学生' };
+
 function renderHeader() {
   const u = state.user;
   const area = document.getElementById('user-area');
   if (u) {
-    const consoleLink =
-      u.role === 'admin'
-        ? `<a href="#/admin">管理后台</a>`
-        : u.role === 'teacher'
-        ? `<a href="#/teacher">教学中心</a>`
-        : `<a href="#/me">我的学习</a>`;
+    const home = ROLE_HOME[u.role] || '#/student';
     area.innerHTML = `
       <div class="usermenu" id="usermenu">
         ${avatarHtml(u)}
         <div style="line-height:1.15">
           <div style="font-size:13px;font-weight:700">${esc(u.nickname)}</div>
-          <div class="tiny muted">${{ admin: '管理员', teacher: '教师', student: '学生' }[u.role]}</div>
+          <div class="tiny muted">${ROLE_LABEL[u.role] || '用户'}</div>
         </div>
         <span class="muted" style="font-size:10px">▾</span>
       </div>`;
     const menu = area.querySelector('#usermenu');
     menu.addEventListener('click', () => {
+      const links = [
+        `<a class="btn ghost" href="${home}" data-close style="justify-content:flex-start">${u.role === 'admin' ? '⚙️ 管理后台' : u.role === 'teacher' ? '🏫 教师后台' : '🎒 学生后台'}</a>`,
+        u.role === 'admin' ? `<a class="btn ghost" href="#/teacher" data-close style="justify-content:flex-start">🏫 教学中心</a>` : '',
+        `<a class="btn ghost" href="#/me?tab=settings" data-close style="justify-content:flex-start">👤 账号设置</a>`,
+      ].join('');
       modal({
         title: '账号',
-        body: `<div class="col">
-          <a class="btn ghost" href="#/me" data-close style="justify-content:flex-start">👤 个人中心</a>
-          <a class="btn ghost" href="#/teacher" data-close style="justify-content:flex-start">🏫 教学中心</a>
-          <a class="btn ghost" href="#/admin" data-close style="justify-content:flex-start">⚙️ 管理后台</a>
+        body: `<div class="col">${links}
           <button class="btn danger" id="do-logout" style="justify-content:flex-start">退出登录</button>
         </div>`,
         cancelText: '',
@@ -127,6 +130,10 @@ document.getElementById('btn-create').addEventListener('click', (e) => {
   openCreateDialog();
 });
 
+/* ---------- 外观切换 ---------- */
+initTheme();
+document.getElementById('theme-slot').appendChild(themeButton());
+
 /* ---------- 移动端导航 ---------- */
 const navToggle = document.getElementById('nav-toggle');
 const navScrim = document.getElementById('nav-scrim');
@@ -161,6 +168,7 @@ async function route() {
   document.querySelectorAll('.modal-mask').forEach((m) => m.remove());
   // 分享页是给外部访客看的独立页面，隐藏站点导航条
   document.body.classList.toggle('share-mode', /^\/s\//.test(path));
+  document.body.classList.toggle('dash-mode', /\/(admin|teacher|student|me)$/.test(path));
   renderHeader();
   let matched = null;
   for (const r of routes) {

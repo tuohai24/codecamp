@@ -1,8 +1,11 @@
 /* 创作页外壳：编辑能力全部由官方 scratch-gui 提供，这里只负责登录、保存、发布 */
 import { api, state, loadMe } from '../api.js';
+import { initTheme } from '../theme.js';
 import { toast } from '../ui.js';
 import { mountAssignmentBrief } from './assignment-brief.js';
 import { openShareDialog } from '../share.js';
+
+initTheme();
 
 const $ = (s) => document.querySelector(s);
 

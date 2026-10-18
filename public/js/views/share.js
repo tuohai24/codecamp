@@ -181,13 +181,13 @@ export async function render(root, { params }) {
         .map((im) => `<img src="data:${im.mime};base64,${im.data}" style="max-width:100%;background:#fff;border-radius:8px;margin-top:8px" />`)
         .join('');
       out.innerHTML =
-        (res.stdout ? `<span style="color:#7bdcb5">${esc(res.stdout)}</span>` : '') +
-        (res.stderr ? `<span style="color:#ff8fa3">${esc(res.stderr)}</span>` : '') +
+        (res.stdout ? `<span class="ok">${esc(res.stdout)}</span>` : '') +
+        (res.stderr ? `<span class="err">${esc(res.stderr)}</span>` : '') +
         (res.stdout || res.stderr ? '' : '<span class="muted">（没有输出）</span>') +
-        `<div style="color:#64748b;font-size:11.5px;margin-top:6px">${res.ok ? '✅ 运行成功' : '⚠️ 有错误'} · ${res.ms} ms</div>` +
+        `<div class="console-meta">${res.ok ? '✅ 运行成功' : '⚠️ 有错误'} · ${res.ms} ms</div>` +
         imgs;
     } catch (err) {
-      out.innerHTML = `<span style="color:#ff8fa3">${esc(err.message)}</span>`;
+      out.innerHTML = `<span class="err">${esc(err.message)}</span>`;
     } finally {
       btn && (btn.disabled = false);
     }

@@ -1,8 +1,11 @@
 /* Python 创作工作台：真实服务端执行 + pip 安装第三方库 */
 import { api, state, loadMe } from '../api.js';
+import { initTheme } from '../theme.js';
 import { esc, toast } from '../ui.js';
 import { mountAssignmentBrief } from './assignment-brief.js';
 import { openShareDialog } from '../share.js';
+
+initTheme();
 
 const $ = (s) => document.querySelector(s);
 let project = null;
@@ -117,7 +120,7 @@ function renderConsole(stdout, stderr, ms, ok) {
   if (stdout) parts.push(`<span class="ok">${esc(stdout)}</span>`);
   if (stderr) parts.push(`<span class="err">${esc(stderr)}</span>`);
   if (!parts.length) parts.push('<span class="muted">（没有输出）</span>');
-  parts.push(`<div style="color:#64748b;margin-top:8px;font-size:11.5px">${ok ? '✅ 运行成功' : '⚠️ 运行结束（有错误）'} · ${ms} ms</div>`);
+  parts.push(`<div class="console-meta">${ok ? '✅ 运行成功' : '⚠️ 运行结束（有错误）'} · ${ms} ms</div>`);
   const el = $('#console');
   el.innerHTML = parts.join('\n');
   el.scrollTop = el.scrollHeight;

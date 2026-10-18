@@ -11,7 +11,7 @@ export async function render(root, { params }) {
       <div class="grow">
         <h1 style="font-size:20px">${esc(u.nickname)}</h1>
         <div class="muted" style="font-size:13px;margin-top:4px">${roleLabel[u.role] || '用户'} · 加入于 ${(u.created_at || '').slice(0, 10)}</div>
-        ${u.bio ? `<div style="margin-top:8px;font-size:13px;color:#4a4d63">${esc(u.bio)}</div>` : ''}
+        ${u.bio ? `<div style="margin-top:8px;font-size:13px;color:var(--text-2)">${esc(u.bio)}</div>` : ''}
       </div>
       <div class="center">
         <div style="font-size:22px;font-weight:800">${works.total}</div>

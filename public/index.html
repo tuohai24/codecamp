@@ -3,6 +3,15 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<script>
+  /* 主题引导：在任何样式生效前确定 light/dark，避免首屏闪白 */
+  (function () {
+    var mode = 'auto';
+    try { mode = localStorage.getItem('cc_theme') || 'auto'; } catch (e) {}
+    var dark = mode === 'dark' || (mode !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  })();
+</script>
 <meta name="theme-color" content="#5b5bd6" />
 <title>CodeCamp · 少儿编程学堂</title>
 <meta name="description" content="Scratch + Python 在线创作、作品社区与作业管理平台" />
@@ -30,6 +39,7 @@
     </nav>
     <div class="spacer"></div>
     <div class="searchbox"><input id="global-search" type="text" placeholder="搜索作品..." /></div>
+    <div id="theme-slot"></div>
     <a class="btn primary sm" href="/studio/scratch.html" id="btn-create">＋ 创作</a>
     <div id="user-area"></div>
   </div>

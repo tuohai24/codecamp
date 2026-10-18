@@ -7,6 +7,7 @@
  */
 import { api } from '../api.js';
 import { toast } from '../ui.js';
+import { renderMarkdown } from '../md.js';
 
 const esc = (s) =>
   String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -60,7 +61,7 @@ export async function mountAssignmentBrief({ projectId, variant = 'scratch', onS
     </div>
     <div class="hw-brief-body">
       <div class="hw-brief-sub">作业要求</div>
-      ${brief.description ? `<div class="hw-brief-desc">${esc(brief.description)}</div>` : '<div class="hw-brief-desc muted">老师没有填写具体要求。</div>'}
+      ${brief.description ? `<div class="hw-brief-desc md-body">${renderMarkdown(brief.description)}</div>` : '<div class="hw-brief-desc muted">老师没有填写具体要求。</div>'}
       ${
         brief.submission && brief.submission.feedback
           ? `<div class="hw-brief-sub" style="margin-top:14px">老师评语</div><div class="hw-brief-desc">${esc(brief.submission.feedback)}</div>`
@@ -70,7 +71,7 @@ export async function mountAssignmentBrief({ projectId, variant = 'scratch', onS
     <div class="hw-brief-foot">
       <span class="pill ${sub.cls}" id="hw-brief-status">${esc(sub.text)}</span>
       <span class="grow"></span>
-      <a class="btn ghost sm" href="/#/me?tab=homework">全部作业</a>
+      <a class="btn ghost sm" href="/#/student?tab=homework">全部作业</a>
       <button class="btn primary sm" id="hw-brief-submit">${sub.text === '未提交' ? '提交作业' : '重新提交'}</button>
     </div>`;
   document.body.appendChild(wrap);

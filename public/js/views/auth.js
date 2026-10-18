@@ -34,7 +34,7 @@ export async function render(root, { query }) {
 
         ${
           mode === 'login'
-            ? `<div class="card" style="margin-top:20px;padding:12px;background:#fbfbff">
+            ? `<div class="card" style="margin-top:20px;padding:12px;background:var(--surface-2)">
                 <div class="tiny muted" style="margin-bottom:6px">演示账号（密码均为 123456）</div>
                 <div class="row wrap" style="gap:6px">
                   <button class="btn sm ghost" data-acc="admin">管理员 admin</button>

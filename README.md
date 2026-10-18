@@ -167,6 +167,17 @@ sudo systemctl daemon-reload && sudo systemctl enable --now codecamp
 ### 教学
 作业全流程：教师按班级布置作业（类型 / 截止日期 / 要求 / Python 起始代码）→ 学生在「班级作业」点「去完成」直接进入对应编辑器 → 在编辑器里就地提交 → 教师在线打分（0-100）与评语 → 学生端看到成绩与评语。作业列表显示「已交 / 已批」进度。班级管理含班级码、学生名单。
 
+#### 作业要求支持 Markdown + 图片
+
+作业要求正文不再是纯文本，而是一份 **Markdown 文档**：
+
+- **编辑器**：工具条（小标题 / 加粗 / 斜体 / 无序列表 / 有序列表 / 引用 / 行内代码 / 链接 / 图片）+ **编辑 ↔ 预览**切换，边写边看效果。
+- **插图三法**：点「🖼 图片」选文件、直接把截图 **粘贴** 进输入框、或把图片 **拖进来**。图片会先上传到 `/uploads/`，正文里只留一条 `![图注](/uploads/xxx.png)`，所以文本始终很短。
+- **支持语法**：标题、有序/无序列表（含二级缩进）、粗体、斜体、删除线、行内代码、代码块（带语言标记）、引用、表格、分割线、链接、图片。
+- **安全**：渲染器**先整体 HTML 转义再解析语法**，所以任何原始 HTML 只会当文字显示；链接只放行 `http(s)://`、站内路径、`#anchor`、`mailto:`，`javascript:` / `data:` / `//外域` 一律不生成标签。
+- **展示**：老师端作业卡片、学生端「班级作业」、编辑器右上角的作业要求浮层、批改弹窗，全部按 Markdown 渲染（图片按宽度自适应）。
+- **上限**：正文 20000 字符（图片走链接不占正文），超限接口直接返回 400 而不是静默截断。
+
 「去完成」的细节：
 
 - 每个学生每份作业有一份自己的创作草稿（`assignment_works` 表），第一次点「去完成」时按作业类型新建（Scratch 复制官方起始工程，Python 预填老师写的起始代码），之后点「继续完成」打开同一份作品。
@@ -174,8 +185,73 @@ sudo systemctl daemon-reload && sudo systemctl enable --now codecamp
 - **只有从作业入口进来才显示**：浮层同时校验 URL 的 `?assignment=` 与「这份作品确实是该学生在这份作业下的草稿」；新建作品、我的作品里继续编辑、手动拼接参数都不会出现，接口对越权请求返回 403。
 - 未发布的草稿也能批改：老师可以打开本班作业里学生提交的作品（即使学生没点发布），只对该作业的任课老师与管理员放行。
 
+### 三套独立后台
+
+角色不同，登录后看到的入口和侧边栏都不同，共用一套后台骨架（`dash.js`），互不干扰：
+
+| 后台 | 地址 | 侧边栏 |
+|---|---|---|
+| 管理员 | `/#/admin` | 总览 · 用户 · 班级 · 作业 · 素材 · 站点设置 · **系统状态** |
+| 教师 | `/#/teacher` | 总览 · 布置作业 · 批改 · 我的班级 |
+| 学生 | `/#/student` | 总览 · 我的作品 · 班级作业 · 我的成绩 · 设置 |
+
+- **管理员总览**：用户/作品/素材/作业四组统计 + 未批改提醒。
+- **管理员「系统状态」**：进程 RSS 与实际堆占用、数据库文件 / WAL / 上传目录 / sb3 体积、运行时长、Node 与平台版本，以及本版做了哪些性能优化——不需要登服务器就能看资源占用。
+- **教师总览**：班级数、学生数、作业数、待批改、已批改、平均分，下面接最近提交列表，点进去直接批改。
+- **学生总览**：作品数 / 已发布 / 获赞、作业数 / 已交 / 已批、平均分，以及最近作品与待办作业。
+- 学生「我的成绩」把 `submissions` 记录整理成成绩单：作业名、分数、等级、老师评语、提交时间。
+- 窄屏（≤860px）侧边栏变成横向可滚动的标签条，不占垂直空间。
+
 ### 管理
 数据看板（用户 / 作品 / 素材 / 作业统计）、用户 CRUD（角色、班级、禁用、重置密码）、**素材库上传**（角色库 / 背景库 / 声音库，上传后直接出现在官方 Scratch 素材库里）、班级管理、站点设置（站名、标语、是否开放注册、是否允许学生装包、pip 镜像源）。
+
+---
+
+## 外观：跟随系统的深色 / 浅色
+
+全站（含两个创作页、分享页、后台）默认 **跟随系统**：系统切到深色，页面立刻变深色；也可以手动锁定浅色或深色。
+
+- **切换入口**：站点头部右侧的 🖥 / ☀️ / 🌙 按钮，点一下在「跟随系统 → 浅色 → 深色」之间轮换，选择记在 `localStorage.cc_theme`。
+- **不闪白**：`<head>` 里有一段同步内联脚本，在样式表生效前就按 `localStorage` + `prefers-color-scheme` 写好 `data-theme`，所以深色下刷新不会先闪一下白屏。
+- **实现**：只有一套 CSS 变量（`--bg / --surface / --text / --border / --hover / --brand-soft / --code-bg` …），`[data-theme='dark']` 覆盖同名变量，组件不写死颜色；`theme-color` 也随主题同步，手机地址栏颜色跟着变。
+- **系统主题运行中变化**：`matchMedia('(prefers-color-scheme: dark)')` 监听 change 事件，处于「跟随系统」时自动重绘，不用刷新。
+
+---
+
+## 性能与资源占用
+
+目标是一台 1 核 1G 的小机器也能带一个班。做法集中在**少查库、少传输、少写盘**三件事：
+
+**数据库**
+
+- 单文件 SQLite（`node:sqlite`），`WAL` + `synchronous=NORMAL` + `temp_store=MEMORY` + `mmap_size=128MB` + `cache_size=20MB`，读写不互相阻塞，事务不反复 fsync。
+- **prepared statement 缓存**：`db.prepare()` 包了一层 Map 缓存（上限 400 条），同一 SQL 只编译一次——热点接口的 SQL 编译开销直接归零。
+- **18 条覆盖索引**对齐四条主查询路径（列表、详情、计数、鉴权），点赞数/评论数用索引子查询实时算，不维护冗余计数列。
+- **写放大治理**：浏览量在内存 Map 里累加，每 5 秒合并成一个事务落库；进程退出（SIGINT/SIGTERM）前 `flushViews()` 兜底，退出时再做一次 `wal_checkpoint(TRUNCATE)` 把 WAL 收回去。
+
+**HTTP**
+
+- **ETag + `If-None-Match`**：静态资源二次访问返回 `304`，body 长度为 0。
+- **按 mtime 缓存的 gzip**：只压缩 >1KB 的文本资源，压缩结果缓存在内存（上限 12MB，文件改动自动失效）。`app.css` 从 51KB 压到约 10.7KB，`app.js`、各视图模块同理。
+- **JSON 只在大响应时压缩**（>2KB），小接口不为省几十字节白跑一次 deflate。
+- **路由分桶**：按「方法 + 二级路径」分桶，一个请求只跑同桶里的几条正则，不再遍历全表。
+- **进程内缓存**：鉴权用户 10 秒、站点统计 20 秒、素材库 JSON 常驻内存（写操作主动失效），登录态校验不再每个请求查一次库。
+- 长连接复用（`keepAliveTimeout`）、`requestTimeout` 与超时保护，避免慢连接拖住事件循环。
+
+**前端**
+
+- 原生 ES Module，**没有打包器、没有运行时框架**：浏览器直接加载模块，首屏只解析用到的部分。
+- 视图按需加载（每个后台/页面一个模块），Markdown 渲染器 6KB 自研，不引第三方库。
+- 图片 `loading="lazy"`，列表分页（默认 20/页），避免一次拉全表。
+
+**实测（本机，127.0.0.1，20 并发）**
+
+| 指标 | 数值 |
+|---|---|
+| 混合请求（首页 / CSS / JS / 接口） | 1600 请求全部成功，约 **1085 QPS**，平均 0.92ms |
+| 进程内存（空载，含 Python 运行环境探测） | RSS ≈ **55MB**，堆已用 ≈ **7MB** |
+| `app.css` 传输 | 51KB → gzip 10.7KB；再次访问 `304`、0 字节 |
+
 
 ---
 
@@ -184,9 +260,12 @@ sudo systemctl daemon-reload && sudo systemctl enable --now codecamp
 | 层 | 实现 |
 |---|---|
 | 服务端 | Node.js 原生 `http`，无任何 npm 依赖 |
-| 数据库 | `node:sqlite`（内置，WAL 模式），SQL 全部使用参数绑定 |
+| 数据库 | `node:sqlite`（内置单文件，WAL + 语句缓存 + 18 条索引），SQL 全部使用参数绑定 |
+| 缓存 | 进程内 Map（用户 10s / 站点 20s / 素材库常驻）+ 浏览量内存累加、5 秒批量落库 |
 | 鉴权 | scrypt 加盐口令 + HMAC-SHA256 签名 Token（7 天有效） |
-| 前端 | 原生 ES Module 多页应用 + hash 路由，无构建步骤 |
+| 前端 | 原生 ES Module 多页应用 + hash 路由，无构建步骤、无框架 |
+| 外观 | CSS 变量 + `[data-theme]` 单属性切换，默认跟随 `prefers-color-scheme` |
+| 富文本 | 自研 Markdown 渲染器（先转义后解析）+ 图片上传 |
 | 图形化 | **Scratch 官方 `scratch-gui@5.3.0` 构建产物**（含官方 React 界面 + scratch-vm 5.0.300 / scratch-render 2.2.84 / scratch-blocks 1.3.0 / scratch-storage 4.1.27），本地 `public/vendor/scratch-gui`，不依赖外网 CDN |
 | 代码编辑 | CodeMirror 5（本地） |
 | Python | 子进程 + 项目内 venv，`runners/pyshim/turtle.py` 提供无 GUI 的 turtle 实现 |
@@ -245,9 +324,11 @@ install.sh                 一键安装 / 更新 / 卸载（Linux、macOS、Wind
 install.ps1                同上，Windows PowerShell 版
 scripts/setup.js           安装器实现（install / update / uninstall / start / stop / status / logs / passwd）
 scripts/fetch-scratch-assets.js  批量同步官方素材到本地镜像
-server.js                  HTTP 服务、路由分发、鉴权、静态资源
-src/db.js                  建表 + 演示数据
+server.js                  HTTP 服务、路由分发、鉴权、静态资源、优雅退出
+src/db.js                  建表 + 索引 + 迁移 + 演示数据（WAL 调优、prepared 语句缓存）
 src/api.js                 全部 REST 接口
+src/http-util.js           路由分桶、JSON/静态文件响应、ETag/304、gzip 缓存
+src/cache.js               进程内缓存（用户/站点/素材库）+ 浏览量批量落库
 src/auth.js                口令哈希 / Token 签发校验
 src/python-runner.js       venv 管理、代码执行、pip 安装、产物收集
 src/seed-assets.js         内置角色 / 背景 SVG 写入素材库
@@ -255,17 +336,27 @@ runners/pyshim/turtle.py   教学用 turtle → SVG 兼容层
 public/                    前端（index.html 为 SPA 外壳）
   studio/scratch.html      创作页外壳（顶栏 + 官方编辑器 iframe）
   studio/python.html       代码创作页
+  js/app.js                SPA 路由、站点头、主题按钮、角色入口
+  js/theme.js              深/浅色：跟随系统 / 手动锁定，localStorage + matchMedia
+  js/md.js                 自研 Markdown 渲染器（先转义再解析，链接白名单）
+  js/md-editor.js          Markdown 编辑器：工具条 + 预览 + 图片上传（按钮/粘贴/拖拽）
+  js/dash.js               后台骨架（三个后台共用：侧栏 + 标题 + 内容区）
+  js/views/admin.js        管理员后台（7 个标签页，含系统状态）
+  js/views/teacher.js      教师后台（总览 / 布置 / 批改 / 班级）
+  js/views/me.js           学生后台（总览 / 作品 / 作业 / 成绩 / 设置）
   js/studio/scratch.js     外壳逻辑：登录校验、保存、发布、自动保存
   js/studio/assignment-brief.js  创作页的作业要求浮层（仅作业入口渲染）
   js/scratch/player.js     社区作品播放器（按需加载官方内核）
   js/scratch/engine.js     VM + 渲染器装配（播放器用）
   js/share.js              分享弹窗（生成/编辑链接、挑选分享页按键）
   js/views/share.js        分享页 #/s/<token>
+  css/app.css              全站样式（语义化 CSS 变量 + 深色覆盖 + 响应式）
   vendor/scratch-gui/      官方 scratch-gui 构建产物 + host.html（编辑器宿主页，含窄屏视图切换）
   vendor/react/            React 16 UMD（官方 GUI 的外部依赖）
   vendor/scratch/          scratch-vm / scratch-render / scratch-storage（播放器用）
 public/assets/library/     内置素材（SVG）
 data/sb3/                  作品的官方 .sb3 工程文件
+data/uploads/              用户上传的图片与声音（作业插图、素材库）
 data/                      运行时数据（sqlite、上传文件、venv、临时运行目录）
 ```
 
@@ -296,6 +387,7 @@ data/                      运行时数据（sqlite、上传文件、venv、临�
 
 ```
 POST /api/auth/login | register          GET/PATCH /api/auth/me
+GET  /api/site                           # 站名、标语、统计（20s 内存缓存）
 GET  /api/projects?type=&sort=&q=&mine=  POST /api/projects
 GET/PATCH/DELETE /api/projects/:id       POST /api/projects/:id/like | view | comments
 GET/POST /api/projects/:id/share         # 读取 / 生成作品的分享链接（作者、管理员）
@@ -303,16 +395,22 @@ PATCH/DELETE /api/shares/:id             # 修改分享页标题、留言、按�
 GET  /api/share/:token                   # 分享页数据（免登录，含 views 自增）
 POST /api/share/:token/remix             # 一起改编：复制作品到当前账号
 GET  /api/assets?kind=sprite|backdrop|sound   POST/PATCH/DELETE /api/assets[/:id]
+POST /api/uploads/image                  # 作业插图 / 头像：dataURL → /uploads/xxx.png（教师、管理员）
 GET  /api/scratch/library                # 站内素材，组装成官方库条目
 GET  /api/scratch/asset/:md5ext          # 站内 + 官方素材字节（本地镜像优先，未命中回源）
 GET  /api/scratch/mirror                 # 官方素材镜像缓存状态
 POST /api/scratch/mirror/sync            # 后台触发官方素材全量同步
 GET/POST /api/classes                    GET /api/classes/:id/students
-GET/POST /api/assignments                POST /api/assignments/:id/start   # 去完成：准备/复用作业草稿
+GET/POST /api/assignments                # description 为 Markdown，≤20000 字符
+PATCH/DELETE /api/assignments/:id        # 改要求 / 换图 / 改截止日期 / 删除
+POST /api/assignments/:id/start          # 去完成：准备或复用作业草稿
 GET  /api/assignments/:id/brief?project= # 编辑器里展示作业要求（仅作业入口）
 POST /api/assignments/:id/submit
 GET  /api/submissions                    PATCH /api/submissions/:id      # 打分
 GET  /api/admin/stats | users | projects | settings
+GET  /api/admin/system                   # 进程 RSS / 堆、DB / WAL / 上传体积、运行时长
+GET  /api/teacher/overview               # 教师后台总览
+GET  /api/student/overview               # 学生后台总览
 POST /api/python/run                     GET/POST /api/python/packages   # 运行 / 装包
 ```
 
@@ -320,8 +418,8 @@ POST /api/python/run                     GET/POST /api/python/packages   # 运�
 
 ## 与原项目的差异
 
-已实现：社区、双引擎创作、作业、班级、三类角色权限、素材库、后台配置。
+已实现：社区、双引擎创作、作业（Markdown 要求 + 插图）、班级、三类角色权限、**管理员 / 教师 / 学生三套独立后台**、素材库、后台配置、**跟随系统的深色模式**、全站性能优化。
 
 未实现（原商业版能力）：CRM / 教务排课、题库与考试、赛事、文章 CMS、微信生态与支付、七牛云对象存储、ScratchJr / Blockly 独立引擎。
 
-如需继续扩展，`src/api.js` 的路由表与 `public/js/views/*` 页面都按功能分块，新增一个模块通常只需「加一张表 + 一组路由 + 一个视图」。
+如需继续扩展，`src/api.js` 的路由表与 `public/js/views/*` 页面都按功能分块，新增一个模块通常只需「加一张表 + 一组路由 + 一个视图」；新增一个后台标签页只需往 `navItem()` 里加一项、在对应 `views/*.js` 里加一个 `case`。

@@ -1,4 +1,14 @@
 'use strict';
+/**
+ * 数据库层：单文件 SQLite（Node 22 内置 node:sqlite，零依赖）。
+ *
+ * 设计取舍：
+ *  - 不引入 ORM / 不引入 MySQL：单文件 + WAL 足够支撑班级规模的读写，
+ *    部署时只要拷走 data/codecamp.db 就是完整备份。
+ *  - 表结构只保留必要字段，计数类数据（点赞数/评论数）用索引化子查询实时算，
+ *    避免冗余列不一致。
+ *  - 所有 SQL 走 prepare 缓存，热点接口不再重复编译语句（CPU 明显下降）。
+ */
 const path = require('node:path');
 const fs = require('node:fs');
 const { DatabaseSync } = require('node:sqlite');
@@ -9,8 +19,47 @@ const DATA_DIR = path.join(ROOT, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const db = new DatabaseSync(path.join(DATA_DIR, 'codecamp.db'));
-db.exec('PRAGMA journal_mode = WAL');
-db.exec('PRAGMA foreign_keys = ON');
+
+/* -------- 运行参数：WAL + 常规写入 + 内存临时表，兼顾速度与安全 -------- */
+db.exec(`
+  PRAGMA journal_mode = WAL;
+  PRAGMA synchronous = NORMAL;
+  PRAGMA foreign_keys = ON;
+  PRAGMA busy_timeout = 5000;
+  PRAGMA temp_store = MEMORY;
+  PRAGMA cache_size = -20000;
+  PRAGMA mmap_size = 134217728;
+  PRAGMA wal_autocheckpoint = 512;
+  PRAGMA journal_size_limit = 67108864;
+`);
+
+/* -------- 语句缓存：同一 SQL 只编译一次（最多 400 条，超出清空重来） -------- */
+const stmtCache = new Map();
+const rawPrepare = db.prepare.bind(db);
+db.prepare = function cachedPrepare(sql) {
+  let stmt = stmtCache.get(sql);
+  if (stmt === undefined) {
+    if (stmtCache.size >= 400) stmtCache.clear();
+    stmt = rawPrepare(sql);
+    stmtCache.set(sql, stmt);
+  }
+  return stmt;
+};
+
+/** 事务包装：fn 抛错自动回滚 */
+function tx(fn) {
+  db.exec('BEGIN');
+  try {
+    const out = fn();
+    db.exec('COMMIT');
+    return out;
+  } catch (e) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {}
+    throw e;
+  }
+}
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -52,7 +101,15 @@ CREATE TABLE IF NOT EXISTS assets (
   tags TEXT DEFAULT '',
   url TEXT NOT NULL,
   uploader_id INTEGER,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  -- 素材元数据：老库由下面的 upgradeAssets() 逐列补齐，新库这里一次建全
+  format TEXT DEFAULT '',
+  md5 TEXT DEFAULT '',
+  width INTEGER DEFAULT 0,
+  height INTEGER DEFAULT 0,
+  bytes INTEGER DEFAULT 0,
+  rate INTEGER DEFAULT 0,
+  duration REAL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS likes (
   user_id INTEGER NOT NULL,
@@ -102,7 +159,7 @@ CREATE TABLE IF NOT EXISTS assignment_works (
   created_at TEXT NOT NULL,
   PRIMARY KEY (assignment_id, student_id)
 );
--- 作品分享链接：一个作品可以生成一个可对外公开的分享页，页面上放作者挑好的常用按键
+-- 作品分享链接：一个作品可以生成一个对外公开的分享页，页面上放作者挑好的常用按键
 CREATE TABLE IF NOT EXISTS shares (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   token TEXT UNIQUE NOT NULL,
@@ -116,12 +173,6 @@ CREATE TABLE IF NOT EXISTS shares (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_shares_project ON shares(project_id);
-CREATE INDEX IF NOT EXISTS idx_shares_token ON shares(token);
-CREATE INDEX IF NOT EXISTS idx_aw_project ON assignment_works(project_id);
-CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
-CREATE INDEX IF NOT EXISTS idx_projects_pub ON projects(published, type);
-CREATE INDEX IF NOT EXISTS idx_assets_kind ON assets(kind);
 `);
 
 // 素材表增量升级：kind 由 costume/backdrop 扩展为 sprite/backdrop/sound，并补充素材元数据
@@ -139,6 +190,29 @@ CREATE INDEX IF NOT EXISTS idx_assets_kind ON assets(kind);
   add('duration', 'REAL DEFAULT 0');
   db.exec("UPDATE assets SET kind='sprite' WHERE kind='costume'");
 })();
+
+// 索引必须放在迁移之后建：老库缺列时 CREATE INDEX 会直接报错，导致启动失败
+db.exec(`
+-- 索引：覆盖列表、详情、计数、鉴权四条主查询路径
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_class ON users(class_id);
+CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_projects_pub ON projects(published, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_projects_type ON projects(type);
+CREATE INDEX IF NOT EXISTS idx_likes_project ON likes(project_id);
+CREATE INDEX IF NOT EXISTS idx_comments_project ON comments(project_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_assignments_class ON assignments(class_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_assignments_teacher ON assignments(teacher_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_submissions_assignment ON submissions(assignment_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_student ON submissions(student_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_submissions_project ON submissions(project_id);
+CREATE INDEX IF NOT EXISTS idx_assets_kind ON assets(kind);
+CREATE INDEX IF NOT EXISTS idx_assets_md5 ON assets(md5);
+CREATE INDEX IF NOT EXISTS idx_shares_project ON shares(project_id);
+CREATE INDEX IF NOT EXISTS idx_shares_token ON shares(token);
+CREATE INDEX IF NOT EXISTS idx_shares_user ON shares(user_id);
+CREATE INDEX IF NOT EXISTS idx_aw_project ON assignment_works(project_id);
+`);
 
 const now = () => new Date().toISOString();
 const iso = (y, m, d) => new Date(Date.UTC(y, m - 1, d, 2, 0, 0)).toISOString();
@@ -160,8 +234,6 @@ function seed() {
   insertUser.run('student', pwd, '小明', 'student', '', '小学五年级，喜欢做小游戏', classId, now());
   insertUser.run('xiaohong', pwd, '小红', 'student', '', '喜欢用 Python 画画', classId, now());
   insertUser.run('teacher2', pwd, '李老师', 'teacher', '', 'Python 教研组', null, now());
-
-  db.prepare('UPDATE classes SET id = ? WHERE code = ?').run(classId, 'CLASS01');
 
   /* 演示作品使用官方 Scratch 3 作品包（.sb3），由 src/seed-scratch.js 生成 */
   const demoScratch = { format: 'sb3', seed: 'demo' };
@@ -189,12 +261,53 @@ print("画完啦！一共 60 条边")
   db.prepare(
     'INSERT INTO assignments (teacher_id,class_id,title,description,type,due_at,starter,created_at) VALUES (?,?,?,?,?,?,?,?)'
   ).run(
-    2, classId, '第 3 课 · 让角色动起来', '要求：\n1. 至少使用「移动 10 步」和「碰到边缘就反弹」\n2. 按空格键也能触发一次移动\n3. 给作品起个名字并发布到社区', 'scratch', iso(2026, 10, 25), '', iso(2026, 10, 10)
+    2,
+    classId,
+    '第 3 课 · 让角色动起来',
+    `## 本课目标
+
+用积木让小猫**听你的话**地移动。
+
+### 要求
+
+1. 至少使用「移动 10 步」和「碰到边缘就反弹」
+2. 按 \`空格键\` 也能触发一次移动
+3. 给作品起个名字，并发布到社区
+
+> 小提示：先想清楚「按什么键 → 做什么动作」，再动手拖积木。
+
+\`\`\`text
+当按下 → 键
+  面向 90 方向
+  移动 10 步
+\`\`\`
+`,
+    'scratch',
+    iso(2026, 10, 25),
+    '',
+    iso(2026, 10, 10)
   );
   db.prepare(
     'INSERT INTO assignments (teacher_id,class_id,title,description,type,due_at,starter,created_at) VALUES (?,?,?,?,?,?,?,?)'
   ).run(
-    2, classId, '第 4 课 · 用 turtle 画五角星', '要求：用 for 循环画出五角星，边长 120，颜色自选。提交 py 作品链接。', 'python', iso(2026, 10, 30), 'import turtle\n\nt = turtle.Turtle()\n', iso(2026, 10, 12)
+    2,
+    classId,
+    '第 4 课 · 用 turtle 画五角星',
+    `## 任务
+
+用 \`for\` 循环画出五角星：边长 120，颜色自选。
+
+| 参数 | 值 |
+| --- | --- |
+| 重复次数 | 5 |
+| 每次转角 | 144° |
+| 边长 | 120 |
+
+提交一份 **Python 作品**。`,
+    'python',
+    iso(2026, 10, 30),
+    'import turtle\n\nt = turtle.Turtle()\n',
+    iso(2026, 10, 12)
   );
 
   db.prepare("INSERT INTO comments (project_id,user_id,content,created_at) VALUES (?,?,?,?)").run(1, 4, '小猫好可爱，我照着做了一个！', iso(2026, 9, 20));
@@ -236,4 +349,14 @@ function migrate() {
 }
 migrate();
 
-module.exports = { db, now, DATA_DIR, ROOT };
+/** 退出前把 WAL 收进主库，避免日志文件越滚越大 */
+function closeDb() {
+  try {
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+  } catch {}
+  try {
+    db.close();
+  } catch {}
+}
+
+module.exports = { db, tx, now, DATA_DIR, ROOT, closeDb };

@@ -5,6 +5,15 @@ const crypto = require('node:crypto');
 const { db, now, DATA_DIR } = require('./db');
 const { hashPassword, verifyPassword, sign } = require('./auth');
 const { HttpError, sendBuffer, MIME } = require('./http-util');
+const {
+  getUser,
+  invalidateUser,
+  getSite,
+  invalidateSite,
+  getLibrary,
+  invalidateLibrary,
+  addView,
+} = require('./cache');
 const py = require('./python-runner');
 const mirror = require('./scratch-mirror');
 const {
@@ -37,8 +46,31 @@ const getSetting = (key, def = '') => {
   return row ? row.value : def;
 };
 
-function sendAsset(ctx, buf, contentType, cache) {
-  ctx.res.writeHead(200, {
+/** 目录占用大小（系统状态页用，管理后台偶尔调用，不做缓存） */
+function sizeOfDir(dir) {
+  let total = 0;
+  const walk = (p) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(p, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = path.join(p, e.name);
+      if (e.isDirectory()) walk(full);
+      else {
+        try {
+          total += fs.statSync(full).size;
+        } catch {}
+      }
+    }
+  };
+  walk(dir);
+  return total;
+}
+
+function sendAsset(ctx, buf, contentType, cache) {  ctx.res.writeHead(200, {
     'Content-Type': contentType,
     'Content-Length': buf.length,
     'Cache-Control': cache || 'public, max-age=86400',
@@ -93,19 +125,30 @@ function workOf(assignmentId, studentId) {
   };
 }
 
+/** 作业要求正文：支持 Markdown，最多 20000 字符；超限直接报错而不是静默截断 */
+const DESC_LIMIT = 20000;
+function checkDescription(v) {
+  const s = String(v == null ? '' : v);
+  if (s.length > DESC_LIMIT) throw new HttpError(400, `作业要求最多 ${DESC_LIMIT} 字符（当前 ${s.length}）`);
+  return s;
+}
+
 function buildApi(r) {
   // ---------- 站点信息 ----------
-  r.get('/api/site', null, () => ({
-    name: getSetting('site_name', 'CodeCamp 少儿编程学堂'),
-    slogan: getSetting('site_slogan', ''),
-    allowRegister: getSetting('allow_register', '1') === '1',
-    stats: {
-      works: db.prepare('SELECT COUNT(*) c FROM projects WHERE published=1').get().c,
-      students: db.prepare("SELECT COUNT(*) c FROM users WHERE role='student'").get().c,
-      teachers: db.prepare("SELECT COUNT(*) c FROM users WHERE role='teacher'").get().c,
-      assets: db.prepare('SELECT COUNT(*) c FROM assets').get().c,
-    },
-  }));
+  // 首页每次加载都会打这个接口，统计走 20s 缓存，避免四次全表 COUNT
+  r.get('/api/site', null, () =>
+    getSite(() => ({
+      name: getSetting('site_name', 'CodeCamp 少儿编程学堂'),
+      slogan: getSetting('site_slogan', ''),
+      allowRegister: getSetting('allow_register', '1') === '1',
+      stats: {
+        works: db.prepare('SELECT COUNT(*) c FROM projects WHERE published=1').get().c,
+        students: db.prepare("SELECT COUNT(*) c FROM users WHERE role='student'").get().c,
+        teachers: db.prepare("SELECT COUNT(*) c FROM users WHERE role='teacher'").get().c,
+        assets: db.prepare('SELECT COUNT(*) c FROM assets').get().c,
+      },
+    }))
+  );
 
   // ---------- 认证 ----------
   r.post('/api/auth/register', null, (ctx) => {
@@ -151,6 +194,7 @@ function buildApi(r) {
       if (String(password).length < 6) throw new HttpError(400, '新密码至少 6 位');
       db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashPassword(password), ctx.user.id);
     }
+    invalidateUser(ctx.user.id);
     return pub(db.prepare('SELECT * FROM users WHERE id = ?').get(ctx.user.id));
   });
 
@@ -234,15 +278,22 @@ function buildApi(r) {
       .get(projectId, user.id, user.role);
   };
 
+  // 详情页一次查询拿全（含 data），比原来「先查列表字段再查 data」少一次往返
+  const projectDetailSelect = projectSelect.replace('SELECT p.id', 'SELECT p.data,p.id');
+
   r.get('/api/projects/:id', null, (ctx) => {
-    const p = db.prepare(`${projectSelect} WHERE p.id = ?`).get(ctx.user ? ctx.user.id : null, ctx.user ? ctx.user.id : null, Number(ctx.params.id));
+    const uid = ctx.user ? ctx.user.id : null;
+    const p = db.prepare(`${projectDetailSelect} WHERE p.id = ?`).get(uid, uid, Number(ctx.params.id));
     if (!p) throw new HttpError(404, '作品不存在');
     const canSee = p.published || (ctx.user && (ctx.user.id === p.user_id || ctx.user.role === 'admin' || teacherCanGrade(p.id, ctx.user)));
     if (!canSee) throw new HttpError(403, '作品未发布');
-    db.prepare('UPDATE projects SET views = views + 1 WHERE id = ?').run(p.id);
+    addView('project', p.id);
     p.views += 1;
-    const full = db.prepare('SELECT data FROM projects WHERE id = ?').get(p.id);
-    p.data = JSON.parse(full.data || '{}');
+    try {
+      p.data = JSON.parse(p.data || '{}');
+    } catch {
+      p.data = {};
+    }
     p.isOwner = !!ctx.user && ctx.user.id === p.user_id;
     return p;
   });
@@ -456,7 +507,7 @@ function buildApi(r) {
     if (!s) throw new HttpError(404, '分享链接不存在或已失效');
     const p = db
       .prepare(
-        `SELECT p.id,p.user_id,p.type,p.title,p.description,p.thumb,p.published,p.views,p.created_at,p.updated_at,
+        `SELECT p.data,p.id,p.user_id,p.type,p.title,p.description,p.thumb,p.published,p.views,p.created_at,p.updated_at,
                 u.nickname,u.avatar,u.bio,
                 (SELECT COUNT(*) FROM likes l WHERE l.project_id=p.id) AS likes,
                 (SELECT COUNT(*) FROM comments c WHERE c.project_id=p.id) AS comments,
@@ -467,14 +518,15 @@ function buildApi(r) {
     if (!p) throw new HttpError(404, '作品已被删除');
     const isOwner = !!ctx.user && (ctx.user.id === p.user_id || ctx.user.role === 'admin');
     if (!p.published && !isOwner) throw new HttpError(403, '作者还没有发布这个作品');
-    const full = db.prepare('SELECT data FROM projects WHERE id = ?').get(p.id);
     try {
-      p.data = JSON.parse(full.data || '{}');
+      p.data = JSON.parse(p.data || '{}');
     } catch {
       p.data = {};
     }
-    db.prepare('UPDATE shares SET views = views + 1 WHERE id = ?').run(s.id);
-    db.prepare('UPDATE projects SET views = views + 1 WHERE id = ?').run(p.id);
+    // 浏览量在内存累加，每 5s 合并成一次事务写库
+    addView('share', s.id);
+    addView('project', p.id);
+    p.views += 1;
     return {
       share: { ...shareView(s), views: s.views + 1 },
       project: p,
@@ -636,6 +688,7 @@ function buildApi(r) {
         duration
       );
     const row = db.prepare('SELECT * FROM assets WHERE id = ?').get(info2.lastInsertRowid);
+    invalidateLibrary();
     return { ...assetView(row), sampleCount };
   });
 
@@ -648,6 +701,7 @@ function buildApi(r) {
       String(b.tags ?? a.tags).slice(0, 60),
       a.id
     );
+    invalidateLibrary();
     return assetView(db.prepare('SELECT * FROM assets WHERE id = ?').get(a.id));
   });
 
@@ -655,6 +709,7 @@ function buildApi(r) {
     const a = db.prepare('SELECT * FROM assets WHERE id = ?').get(Number(ctx.params.id));
     if (!a) throw new HttpError(404, '素材不存在');
     db.prepare('DELETE FROM assets WHERE id = ?').run(a.id);
+    invalidateLibrary();
     // 同一份文件可能被多条素材复用（按 md5 去重），确认没有引用后再删文件
     const stillUsed = db.prepare('SELECT COUNT(*) c FROM assets WHERE url = ?').get(a.url).c;
     if (!stillUsed && a.url.startsWith('/uploads/')) {
@@ -663,6 +718,16 @@ function buildApi(r) {
       } catch {}
     }
     return { ok: true };
+  });
+
+  // ---------- 图片上传（作业插图 / 公告配图） ----------
+  // 前端把文件读成 dataURL 提交，这里落盘并返回站内 URL，可直接写进 Markdown：![](url)
+  r.post('/api/uploads/image', ['admin', 'teacher'], (ctx) => {
+    const dataUrl = String((ctx.body && ctx.body.dataUrl) || '');
+    if (!/^data:image\/(png|jpeg|jpg|gif|webp|svg\+xml);base64,/i.test(dataUrl)) {
+      throw new HttpError(400, '只支持 PNG / JPG / GIF / WebP / SVG 图片');
+    }
+    return { url: saveDataUrl(dataUrl, 'img') };
   });
 
   // ---------- 官方 Scratch 素材库对接 ----------
@@ -683,7 +748,8 @@ function buildApi(r) {
     };
   }
 
-  r.get('/api/scratch/library', null, () => {
+  r.get('/api/scratch/library', null, () =>
+    getLibrary(() => {
     const rows = db
       .prepare("SELECT * FROM assets WHERE kind IN ('sprite','backdrop','sound') ORDER BY id ASC")
       .all()
@@ -732,7 +798,8 @@ function buildApi(r) {
       }
     }
     return out;
-  });
+    })
+  );
 
   r.get('/api/scratch/asset/:file', null, async (ctx) => {
     const file = String(ctx.params.file || '');
@@ -848,13 +915,31 @@ function buildApi(r) {
         ctx.user.id,
         classId,
         String(b.title).slice(0, 60),
-        String(b.description || '').slice(0, 2000),
+        // 作业要求支持 Markdown + 图片，上限 20000 字符（图片走 /uploads 链接，不占正文）
+        checkDescription(b.description),
         b.type === 'python' ? 'python' : 'scratch',
         String(b.dueAt || ''),
         String(b.starter || ''),
         now()
       );
     return db.prepare('SELECT * FROM assignments WHERE id = ?').get(info.lastInsertRowid);
+  });
+
+  // 修改作业（老师可以随时补充要求 / 换图 / 改截止日期）
+  r.patch('/api/assignments/:id', ['teacher', 'admin'], (ctx) => {
+    const a = db.prepare('SELECT * FROM assignments WHERE id = ?').get(Number(ctx.params.id));
+    if (!a) throw new HttpError(404, '作业不存在');
+    if (ctx.user.role !== 'admin' && a.teacher_id !== ctx.user.id) throw new HttpError(403, '无权修改');
+    const b = ctx.body || {};
+    db.prepare('UPDATE assignments SET title = ?, description = ?, type = ?, due_at = ?, starter = ? WHERE id = ?').run(
+      b.title !== undefined ? String(b.title).slice(0, 60) || a.title : a.title,
+      b.description !== undefined ? checkDescription(b.description) : a.description,
+      b.type !== undefined ? (b.type === 'python' ? 'python' : 'scratch') : a.type,
+      b.dueAt !== undefined ? String(b.dueAt) : a.due_at,
+      b.starter !== undefined ? String(b.starter) : a.starter,
+      a.id
+    );
+    return db.prepare('SELECT * FROM assignments WHERE id = ?').get(a.id);
   });
 
   r.get('/api/assignments/:id', 'any', (ctx) => {
@@ -1047,6 +1132,103 @@ function buildApi(r) {
     };
   });
 
+  // 系统状态：把资源占用直接暴露给管理员，便于判断要不要扩容
+  r.get('/api/admin/system', ['admin'], () => {
+    const mem = process.memoryUsage();
+    const fileSize = (name) => {
+      try {
+        return fs.statSync(path.join(DATA_DIR, name)).size;
+      } catch {
+        return 0;
+      }
+    };
+    return {
+      node: process.version,
+      platform: `${process.platform}-${process.arch}`,
+      uptime: Math.round(process.uptime()),
+      memory: {
+        rss: mem.rss,
+        heapUsed: mem.heapUsed,
+        heapTotal: mem.heapTotal,
+        external: mem.external,
+      },
+      db: {
+        size: fileSize('codecamp.db'),
+        wal: fileSize('codecamp.db-wal'),
+        sb3: sizeOfDir(path.join(DATA_DIR, 'sb3')),
+        uploads: sizeOfDir(path.join(DATA_DIR, 'uploads')),
+      },
+    };
+  });
+
+  // 老师后台首页的汇总数据（一次请求拿全，少三个来回）
+  r.get('/api/teacher/overview', ['teacher', 'admin'], (ctx) => {
+    const isAdmin = ctx.user.role === 'admin';
+    const clsWhere = isAdmin ? '' : 'WHERE teacher_id = ?';
+    const clsArgs = isAdmin ? [] : [ctx.user.id];
+    const classes = db.prepare(`SELECT COUNT(*) c FROM classes ${clsWhere}`).get(...clsArgs).c;
+    const students = db
+      .prepare(
+        isAdmin
+          ? 'SELECT COUNT(*) c FROM users WHERE role = ?'
+          : 'SELECT COUNT(*) c FROM users WHERE role = ? AND class_id IN (SELECT id FROM classes WHERE teacher_id = ?)'
+      )
+      .get('student', ...clsArgs).c;
+    const aWhere = isAdmin ? '' : 'WHERE a.teacher_id = ?';
+    const assignments = db.prepare(`SELECT COUNT(*) c FROM assignments a ${aWhere}`).get(...clsArgs).c;
+    const pending = db
+      .prepare(
+        `SELECT COUNT(*) c FROM submissions s JOIN assignments a ON a.id = s.assignment_id
+         WHERE s.status = 'submitted' ${isAdmin ? '' : 'AND a.teacher_id = ?'}`
+      )
+      .get(...clsArgs).c;
+    const graded = db
+      .prepare(
+        `SELECT COUNT(*) c FROM submissions s JOIN assignments a ON a.id = s.assignment_id
+         WHERE s.status = 'graded' ${isAdmin ? '' : 'AND a.teacher_id = ?'}`
+      )
+      .get(...clsArgs).c;
+    const avg = db
+      .prepare(
+        `SELECT AVG(s.score) v FROM submissions s JOIN assignments a ON a.id = s.assignment_id
+         WHERE s.score IS NOT NULL ${isAdmin ? '' : 'AND a.teacher_id = ?'}`
+      )
+      .get(...clsArgs).v;
+    const recent = db
+      .prepare(
+        `SELECT s.id, s.score, s.status, s.updated_at, u.nickname, a.title assignment_title, a.id assignment_id, p.title project_title
+         FROM submissions s JOIN users u ON u.id = s.student_id
+         JOIN assignments a ON a.id = s.assignment_id LEFT JOIN projects p ON p.id = s.project_id
+         ${isAdmin ? '' : 'WHERE a.teacher_id = ?'}
+         ORDER BY s.updated_at DESC LIMIT 8`
+      )
+      .all(...clsArgs);
+    return { classes, students, assignments, pending, graded, avgScore: avg ? Math.round(avg) : null, recent };
+  });
+
+  // 学生后台首页：作品 / 作业 / 成绩一屏搞定
+  r.get('/api/student/overview', 'any', (ctx) => {
+    const uid = ctx.user.id;
+    const one = (sql, ...a) => db.prepare(sql).get(...a).c;
+    const works = one('SELECT COUNT(*) c FROM projects WHERE user_id = ?', uid);
+    const published = one('SELECT COUNT(*) c FROM projects WHERE user_id = ? AND published = 1', uid);
+    const likes = one('SELECT COUNT(*) c FROM likes l JOIN projects p ON p.id = l.project_id WHERE p.user_id = ?', uid);
+    const inClass = !!ctx.user.class_id;
+    const assignments = inClass ? one('SELECT COUNT(*) c FROM assignments WHERE class_id = ?', ctx.user.class_id) : 0;
+    const submitted = one('SELECT COUNT(*) c FROM submissions WHERE student_id = ?', uid);
+    const graded = one('SELECT COUNT(*) c FROM submissions WHERE student_id = ? AND status = ?', uid, 'graded');
+    const avg = db.prepare('SELECT AVG(score) v FROM submissions WHERE student_id = ? AND score IS NOT NULL').get(uid).v;
+    const recent = db
+      .prepare(
+        `SELECT s.score, s.status, s.updated_at, a.id assignment_id, a.title assignment_title, a.type
+         FROM submissions s JOIN assignments a ON a.id = s.assignment_id
+         WHERE s.student_id = ? ORDER BY s.updated_at DESC LIMIT 6`
+      )
+      .all(uid);
+    return { works, published, likes, assignments, submitted, graded, avgScore: avg ? Math.round(avg) : null, recent, inClass };
+  });
+
+
   r.get('/api/admin/users', ['admin', 'teacher'], (ctx) => {
     const where = [];
     const args = [];
@@ -1093,6 +1275,7 @@ function buildApi(r) {
     if (b.status !== undefined) db.prepare('UPDATE users SET status = ? WHERE id = ?').run(b.status ? 1 : 0, id);
     if (b.classId !== undefined) db.prepare('UPDATE users SET class_id = ? WHERE id = ?').run(b.classId ? Number(b.classId) : null, id);
     if (b.password) db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashPassword(String(b.password)), id);
+    invalidateUser(id);
     return pub(db.prepare('SELECT * FROM users WHERE id = ?').get(id));
   });
 
@@ -1100,6 +1283,7 @@ function buildApi(r) {
     const id = Number(ctx.params.id);
     if (id === ctx.user.id) throw new HttpError(400, '不能删除当前登录账号');
     db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    invalidateUser(id);
     return { ok: true };
   });
 
@@ -1122,6 +1306,7 @@ function buildApi(r) {
       if (!/^[a-z_]{2,40}$/.test(k)) continue;
       db.prepare('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(k, String(v).slice(0, 300));
     }
+    invalidateSite();
     return { ok: true };
   });
 
