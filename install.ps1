@@ -2,9 +2,14 @@
 #
 #   在项目目录里：
 #     .\install.ps1                安装并启动
-#     .\install.ps1 update         更新
+#     .\install.ps1 update         更新到最新版（自动备份数据）
 #     .\install.ps1 uninstall      卸载（保留数据）
 #     .\install.ps1 status
+#
+#   远程一键安装（PowerShell，一条命令）：
+#     irm https://raw.githubusercontent.com/tuohai24/codecamp/main/install.ps1 | iex
+#   远程一键更新：
+#     & ([scriptblock]::Create((irm https://raw.githubusercontent.com/tuohai24/codecamp/main/install.ps1))) update
 #
 #   缺少 Node.js 时会询问是否自动下载一份（只装在 %USERPROFILE%\.codecamp\node，不动系统环境）：
 #     .\install.ps1 --yes           无人值守，缺依赖直接装
@@ -54,6 +59,9 @@ foreach ($raw in $args) {
     $passArgs += $a
   }
 }
+
+# update 时要先停服务、备份数据库再换代码，不能在这里提前 pull
+$wantsUpdate = $passArgs -contains 'update'
 
 # ---------- 小工具 ----------
 function Test-VersionOk([string]$ver) {
@@ -236,11 +244,13 @@ if (-not $root) { $root = (Get-Location).Path }
 if (-not (Test-Path (Join-Path $root 'server.js'))) {
   $git = Get-Command git -ErrorAction SilentlyContinue
   if (Test-Path (Join-Path $target '.git')) {
-    Write-Host "检测到已有安装目录 $target，先拉取最新代码…"
-    if ($git) {
+    if ($wantsUpdate) {
+      Write-Host "检测到已有安装目录 $target，交给更新流程（会先备份数据库）…"
+    } elseif ($git) {
+      Write-Host "检测到已有安装目录 $target，先拉取最新代码…"
       & git -C $target pull --ff-only
     } else {
-      Write-Host '  没有 git，跳过更新，直接使用现有代码'
+      Write-Host "检测到已有安装目录 $target（没有 git，跳过代码拉取）"
     }
     $root = $target
   } elseif ($git) {

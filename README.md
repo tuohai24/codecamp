@@ -32,6 +32,12 @@ cd codecamp
 .\install.ps1
 ```
 
+不手动 clone，一条命令装到 `%USERPROFILE%\codecamp`：
+
+```powershell
+irm https://raw.githubusercontent.com/tuohai24/codecamp/main/install.ps1 | iex
+```
+
 如果提示脚本被禁止运行，先在当前窗口放开一次：
 
 ```powershell
@@ -67,11 +73,46 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ./install.sh status          # 运行状态（进程 / 端口 / 健康检查 / 数据体积）
 ./install.sh logs            # 最近 80 行日志
 ./install.sh restart         # 重启
-./install.sh update          # 更新：备份数据库 → git pull → 重启
+./install.sh update          # 更新到最新版（备份数据库 → 拉代码 → 重启）
 ./install.sh uninstall       # 卸载：停服务、清运行状态，数据保留
 ./install.sh uninstall --purge   # 连同 data/ 一起删除（不可恢复）
 ./install.sh passwd admin 新密码  # 重置某个账号的密码
 ```
+
+### 更新到新版本
+
+在安装目录里执行一条命令即可，账号、作品、上传素材全部保留：
+
+```bash
+./install.sh update            # Linux / macOS / Windows Git Bash
+.\install.ps1 update           # Windows PowerShell
+```
+
+不想进目录也行，直接用远程脚本更新（脚本会自己找到安装目录）：
+
+```bash
+# Linux / macOS / Windows Git Bash
+curl -fsSL https://raw.githubusercontent.com/tuohai24/codecamp/main/install.sh | bash -s -- update
+
+# Windows PowerShell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/tuohai24/codecamp/main/install.ps1))) update
+```
+
+`update` 做了什么：
+
+1. **先探测**：git 安装只做 `fetch`，远端没有新提交就直接结束——服务完全不断，输出「代码已是最新」。
+2. **停服务 + 备份数据库**到 `data/backups/<时间戳>/`（自动只留最近 5 份）。
+3. **换代码**：git 安装走 `pull --ff-only`；压缩包安装（没有 `.git`）自动下载最新源码包，逐文件比对后覆盖，`data/`、`.runtime/` 永远不动。
+4. **重启并自检**：等端口真正响应才算成功，失败会打印日志末尾并提示备份位置；数据库结构变更在启动时自动迁移。
+
+常见情况：
+
+| 情况 | 处理 |
+|---|---|
+| 输出「代码已是最新，服务未中断」 | 已是最新版，无需操作 |
+| 本地改过代码，`pull` 报冲突 | 保留改动：先 `git stash` 再 `update`；丢弃改动：`./install.sh update --force` |
+| 更新后启动失败 | 日志会打印出来，把 `data/backups/<时间戳>/` 里的 db 复制回 `data/` 即可回到旧数据 |
+| 只想要代码不想重启 | `./install.sh update --no-start` |
 
 Windows 把 `./install.sh` 换成 `.\install.ps1`，子命令与参数完全一致。所有命令也可以用 `node scripts/setup.js <命令>` 运行。
 
@@ -86,6 +127,7 @@ Windows 把 `./install.sh` 换成 `.\install.ps1`，子命令与参数完全一�
 | `--host 127.0.0.1` | 只监听本机（默认 `0.0.0.0`，对外提供服务） |
 | `--foreground` | 前台运行，`Ctrl+C` 停止，适合调试或容器 |
 | `--no-start` | 只更新代码，不重启（配合 `update`） |
+| `--force` | `update` 时丢弃本地改动，强制对齐远端（会打印提示） |
 | `--yes` | 缺依赖时自动安装，不再逐项询问 |
 | `--no-install` | 只检查依赖，不自动安装 |
 

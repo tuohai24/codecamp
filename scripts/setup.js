@@ -399,56 +399,271 @@ function commandExists(cmd) {
   }
 }
 
+/* ---------------------------- 更新用的辅助工具 ---------------------------- */
+
+const REPO_URL = process.env.CODECAMP_REPO || 'https://github.com/tuohai24/codecamp';
+const REPO_BRANCH = process.env.CODECAMP_BRANCH || 'main';
+
+// 更新时绝不覆盖的顶层条目：数据、运行状态、依赖、git 元信息
+const PROTECTED = new Set(['data', '.runtime', 'node_modules', '.git', '.env']);
+
+function listFiles(dir, base = dir, out = []) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) listFiles(full, base, out);
+    else if (e.isFile()) out.push(path.relative(base, full));
+  }
+  return out;
+}
+
+// 大文件（vendor 下的引擎）只比大小：内容一致时不重写，省掉几十 MB 的磁盘写
+function sameFile(a, b) {
+  try {
+    const sa = fs.statSync(a);
+    const sb = fs.statSync(b);
+    if (sa.size !== sb.size) return false;
+    if (sa.size > 512 * 1024) return true;
+    return fs.readFileSync(a).equals(fs.readFileSync(b));
+  } catch {
+    return false;
+  }
+}
+
+function syncTree(srcDir, destDir) {
+  const changed = [];
+  for (const rel of listFiles(srcDir)) {
+    if (PROTECTED.has(rel.split(path.sep)[0])) continue;
+    const from = path.join(srcDir, rel);
+    const to = path.join(destDir, rel);
+    if (sameFile(from, to)) continue;
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(from, to);
+    changed.push(rel);
+  }
+  return changed;
+}
+
+async function downloadTo(url, dest) {
+  // 优先用系统工具（能自动走系统代理 / 镜像），最后回退到 Node 自带 fetch
+  if (commandExists('curl')) {
+    execFileSync('curl', ['-fL', '--retry', '2', '--retry-delay', '1', '--connect-timeout', '15', '-o', dest, url], {
+      stdio: 'ignore',
+    });
+    return;
+  }
+  if (commandExists('wget')) {
+    execFileSync('wget', ['-q', '-O', dest, url], { stdio: 'ignore' });
+    return;
+  }
+  const res = await fetch(url, { redirect: 'follow' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  fs.writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
+}
+
+function extractTar(archive, destDir) {
+  fs.mkdirSync(destDir, { recursive: true });
+  // 关键：Windows 上 GNU tar 会把 "C:\..." 的盘符冒号当成「远程主机」，
+  // 所以统一用相对路径 + cwd 调用，避免任何盘符出现在参数里。
+  const base = path.dirname(archive);
+  const rel = path.relative(base, destDir) || '.';
+  const run = (extra) => execFileSync('tar', [...extra, '-xzf', path.basename(archive), '-C', rel], { cwd: base, stdio: 'ignore' });
+  try {
+    run([]);
+  } catch {
+    run(['--force-local']); // GNU tar 的兜底（bsdtar 不认这个参数，所以只重试一次）
+  }
+  const first = fs.readdirSync(destDir, { withFileTypes: true }).find((e) => e.isDirectory());
+  return first ? path.join(destDir, first.name) : destDir;
+}
+
+function gitRev() {
+  try {
+    return execFileSync('git', ['-C', ROOT, 'rev-parse', '--short=7', 'HEAD'], { encoding: 'utf8' }).trim();
+  } catch {
+    return '';
+  }
+}
+
+function gitChangedFiles(from, to) {
+  try {
+    return execFileSync('git', ['-C', ROOT, 'diff', '--name-only', from, to], { encoding: 'utf8' })
+      .trim()
+      .split('\n')
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+// 升级备份只留最近几次，避免 data/backups 越堆越大
+function pruneBackups(keep = 5) {
+  const dir = path.join(DATA_DIR, 'backups');
+  try {
+    const names = fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .sort();
+    while (names.length > keep) {
+      fs.rmSync(path.join(dir, names.shift()), { recursive: true, force: true });
+    }
+  } catch {}
+}
+
 async function cmdUpdate(opts) {
-  say('更新 CodeCamp');
+  const oldVersion = pkgVersion();
+  say(`更新 CodeCamp（当前 v${oldVersion}）`);
   say('----------------------------------------');
+  checkNode();
+
   const conf = loadConf();
   const port = Number(conf.port || 3000);
   const host = String(conf.host || '0.0.0.0');
-
-  // 1. 停服务 + 备份数据库，任何一步失败都不动代码
+  const isGit = fs.existsSync(path.join(ROOT, '.git')) && commandExists('git');
   const wasRunning = !!runningPid();
-  if (wasRunning) await stopServer(true);
 
+  // 1. 先探测有没有新版本：git 仓库可以只 fetch 不切代码，
+  //    没有新提交就直接结束，完全不打断正在运行的服务。
+  if (isGit && !opts.force) {
+    const localRev = gitRev();
+    let remoteRev = '';
+    try {
+      // 注意：这里不能用 --depth 1，浅克隆会让后续 pull 判定成「历史分叉」
+      execFileSync('git', ['-C', ROOT, 'fetch', 'origin', REPO_BRANCH], {
+        stdio: 'ignore',
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      });
+      remoteRev = execFileSync('git', ['-C', ROOT, 'rev-parse', '--short=7', 'FETCH_HEAD'], { encoding: 'utf8' }).trim();
+    } catch {
+      warn('访问远端仓库失败（网络不通或没有权限），只能按当前代码重启。');
+    }
+    if (remoteRev && localRev && remoteRev === localRev) {
+      ok(`代码已是最新（${localRev}），服务未中断。`);
+      say('        想强制重启：node scripts/setup.js restart');
+      return;
+    }
+    if (remoteRev) say(`  发现新版本：${localRev || '?'} → ${remoteRev}`);
+  }
+
+  // 2. 停服务 + 备份数据库：新代码有问题时可以把备份放回去
+  if (wasRunning) await stopServer(true);
   const backup = path.join(DATA_DIR, 'backups', new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19));
+  let backupDone = false;
   try {
     fs.mkdirSync(backup, { recursive: true });
+    let saved = 0;
     for (const name of ['codecamp.db', 'codecamp.db-wal', 'codecamp.db-shm']) {
       const from = path.join(DATA_DIR, name);
-      if (fs.existsSync(from)) fs.copyFileSync(from, path.join(backup, name));
+      if (fs.existsSync(from)) {
+        fs.copyFileSync(from, path.join(backup, name));
+        saved++;
+      }
     }
-    ok(`已备份数据库到 ${path.relative(ROOT, backup)}`);
+    if (saved) {
+      backupDone = true;
+      ok(`已备份数据库到 ${path.relative(ROOT, backup)}`);
+      pruneBackups(5);
+    } else {
+      warn('还没有数据库文件，跳过备份（首次启动会自动创建）');
+      try {
+        fs.rmdirSync(backup);
+      } catch {}
+    }
   } catch (e) {
     warn(`备份失败：${e.message}`);
   }
 
-  // 2. 拉代码
-  let pulled = false;
-  if (fs.existsSync(path.join(ROOT, '.git')) && commandExists('git')) {
+  // 3. 拉代码：git 仓库走 pull，压缩包安装的走「下载最新包 + 覆盖代码文件」
+  const beforeRev = isGit ? gitRev() : '';
+
+  if (isGit) {
+    let pulled = false;
     try {
-      execFileSync('git', ['-C', ROOT, 'pull', '--ff-only'], { stdio: 'inherit' });
+      execFileSync('git', ['-C', ROOT, 'pull', '--ff-only'], { stdio: 'inherit', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
       pulled = true;
     } catch {
-      warn('git pull 没有成功（可能有本地改动或没有远端权限），继续用当前代码重启。');
+      if (opts.force) {
+        warn('--force 已启用：丢弃本地改动，强制对齐远端最新代码。');
+        try {
+          execFileSync('git', ['-C', ROOT, 'fetch', 'origin', REPO_BRANCH], { stdio: 'inherit' });
+          execFileSync('git', ['-C', ROOT, 'reset', '--hard', 'FETCH_HEAD'], { stdio: 'inherit' });
+          pulled = true;
+        } catch {
+          warn('强制更新失败，需要能访问 GitHub。');
+        }
+      } else {
+        warn('git pull 没有成功：可能是本地改过文件或网络不通。');
+        say('        保留本地改动并重试：先 git stash');
+        say('        丢弃本地改动强制更新：./install.sh update --force');
+      }
+    }
+
+    const afterRev = pulled ? gitRev() : beforeRev;
+    if (pulled && beforeRev && afterRev && beforeRev !== afterRev) {
+      const names = gitChangedFiles(beforeRev, afterRev);
+      ok(`代码已更新：${beforeRev} → ${afterRev}（${names.length} 个文件有变化）`);
+      if (names.length && names.length <= 12) names.forEach((n) => say(`        · ${n}`));
+      else if (names.length > 12) {
+        names.slice(0, 12).forEach((n) => say(`        · ${n}`));
+        say(`        · … 另有 ${names.length - 12} 个文件`);
+      }
+    } else if (pulled) {
+      ok(`代码已是最新（${afterRev || '已同步'}，没有新提交）`);
     }
   } else {
-    warn('当前目录不是 git 仓库，跳过代码拉取；如用压缩包安装，请手动覆盖文件。');
+    // 压缩包 / 手动解压安装：下载最新源码包，逐个文件比对后覆盖
+    const slug = REPO_URL.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '');
+    const url = process.env.CODECAMP_TARBALL || `https://codeload.github.com/${slug}/tar.gz/refs/heads/${REPO_BRANCH}`;
+    const tmp = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cc-update-'));
+    try {
+      say(`  当前目录不是 git 仓库，改为下载最新源码包：${url}`);
+      const archive = path.join(tmp, 'src.tar.gz');
+      await downloadTo(url, archive);
+      const srcDir = extractTar(archive, path.join(tmp, 'x'));
+      if (!fs.existsSync(path.join(srcDir, 'server.js'))) throw new Error('压缩包里没有 server.js');
+      const changed = syncTree(srcDir, ROOT);
+      if (changed.length) {
+        ok(`代码已更新：${changed.length} 个文件有变化（data/ 与 .runtime/ 未受影响）`);
+        changed.slice(0, 12).forEach((n) => say(`        · ${n}`));
+        if (changed.length > 12) say(`        · … 另有 ${changed.length - 12} 个文件`);
+      } else {
+        ok('代码已是最新（文件与远端一致）');
+      }
+    } catch (e) {
+      warn(`下载更新失败：${e.message}`);
+      say('        可以手动下载解压覆盖到本目录（保留 data/ 不动），或先安装 git 后重试。');
+    } finally {
+      try {
+        fs.rmSync(tmp, { recursive: true, force: true });
+      } catch {}
+    }
   }
-  if (pulled) ok('代码已更新到最新版本');
 
-  // 3. 重新启动：保持更新前的状态，原来在跑才重启
+  // 3. 启动：原来在跑才重启，保持更新前的状态
+  const newVersion = pkgVersion();
+  saveConf({ version: newVersion, updatedAt: new Date().toISOString() });
+
   if (wasRunning && !opts['no-start']) {
     const pid = startServer(port, host, false);
     if (!(await waitReady(port, 60000))) {
       warn('新版本启动失败，日志末尾：');
       say(tailLog(25));
-      fail(`升级失败。数据库备份在 ${backup}，可回滚后重试。`);
+      fail(`升级失败。数据库备份在 ${backup}，回滚该目录后重新 ./install.sh 即可。`);
     }
-    ok(`已用新版本启动（PID ${pid}）：${serviceUrl(conf)}`);
+    ok(`已用新版本启动（PID ${pid}）：${serviceUrl({ port, host })}`);
   } else if (!wasRunning) {
     say('  服务更新前未在运行，未自动启动。需要时执行：node scripts/setup.js start');
   }
-  if (backup && fs.existsSync(backup)) say(`\n数据备份：${backup}`);
+
+  say('');
+  if (oldVersion !== newVersion) ok(`版本：v${oldVersion} → v${newVersion}`);
+  if (backupDone) say(`  数据备份：${backup}`);
 }
 
 async function cmdUninstall(opts) {
@@ -525,7 +740,9 @@ function cmdHelp() {
     --port N      指定端口
     --host H      监听地址（默认 0.0.0.0，只给本机用可填 127.0.0.1）
     --foreground  前台运行，Ctrl+C 停止
-  update        备份数据库 → git pull → 重启
+  update        备份数据库 → 拉取最新代码 → 重启（git 与压缩包安装都支持）
+    --force       本地改过文件时丢弃改动，强制对齐远端
+    --no-start    只更新代码，不自动重启
   uninstall     停止服务并清理运行状态（默认保留数据）
     --purge       连同 data/（账号、作品、素材）一起删除
     --yes         跳过确认

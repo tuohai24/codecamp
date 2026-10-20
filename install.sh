@@ -2,12 +2,13 @@
 # CodeCamp 一键安装 / 更新 / 卸载（Linux / macOS / Windows Git Bash）
 #
 #   在项目目录里：   ./install.sh              # 安装并启动
-#                    ./install.sh update       # 更新
+#                    ./install.sh update       # 更新到最新版（自动备份数据）
 #                    ./install.sh uninstall    # 卸载（保留数据）
 #                    ./install.sh status
 #
-#   远程一键安装：   curl -fsSL <仓库地址>/raw/main/install.sh | bash
-#                    curl -fsSL <仓库地址>/raw/main/install.sh | bash -s -- --port 8080
+#   远程一键安装：   curl -fsSL https://raw.githubusercontent.com/tuohai24/codecamp/main/install.sh | bash
+#   远程一键更新：   curl -fsSL https://raw.githubusercontent.com/tuohai24/codecamp/main/install.sh | bash -s -- update
+#   指定端口等参数： 在上面的命令后加  -s -- --port 8080
 #
 #   缺少 Node.js 时会询问是否自动下载一份（只装在 ~/.codecamp/node，不动系统环境）：
 #     ./install.sh --yes            # 无人值守，缺依赖直接装
@@ -42,13 +43,21 @@ for arg in "$@"; do
       NO_INSTALL=1
       ;;
     -h | --help)
-      sed -n '2,16p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//' || true
+      # 打印脚本开头的注释作为帮助（从第 2 行起，遇到第一行非注释就停）
+      awk 'NR > 1 { if (/^#/) { sub(/^# ?/, ""); print; next } else exit }' "$0" 2>/dev/null || true
       say ""
       say "交给 setup.js 的参数：--port N   --host H   --foreground   --purge   --no-start   --yes"
       exit 0
       ;;
     *) PASS_ARGS+=("$arg") ;;
   esac
+done
+
+# update 时不能在装依赖前就 git pull：要先停服务、备份数据库，再换代码。
+# 这里只解析意图，真正的拉取交给 scripts/setup.js 的 update 命令。
+WANTS_UPDATE=0
+for a in ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}; do
+  [ "$a" = "update" ] && WANTS_UPDATE=1
 done
 
 # ---------- 通用小工具 ----------
@@ -182,11 +191,13 @@ fetch_tarball() {
 
 if [ -z "$ROOT" ]; then
   if [ -d "$TARGET/.git" ]; then
-    say "检测到已有安装目录 $TARGET，先拉取最新代码…"
-    if command -v git >/dev/null 2>&1; then
+    if [ "$WANTS_UPDATE" = 1 ]; then
+      say "检测到已有安装目录 $TARGET，交给更新流程（会先备份数据库）…"
+    elif command -v git >/dev/null 2>&1; then
+      say "检测到已有安装目录 $TARGET，先拉取最新代码…"
       git -C "$TARGET" pull --ff-only || true
     else
-      say "  没有 git，跳过更新，直接使用现有代码"
+      say "检测到已有安装目录 $TARGET（没有 git，跳过代码拉取）"
     fi
     ROOT="$TARGET"
   elif command -v git >/dev/null 2>&1; then
