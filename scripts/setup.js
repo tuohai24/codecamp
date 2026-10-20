@@ -526,11 +526,13 @@ async function cmdUpdate(opts) {
   const port = Number(conf.port || 3000);
   const host = String(conf.host || '0.0.0.0');
   const isGit = fs.existsSync(path.join(ROOT, '.git')) && commandExists('git');
+  // --tarball：即使有 .git 也改用源码包覆盖（GitHub 的 git 端口被墙、但 codeload / 镜像还能下时用）
+  const useTarball = !!opts.tarball || !isGit;
   const wasRunning = !!runningPid();
 
   // 1. 先探测有没有新版本：git 仓库可以只 fetch 不切代码，
   //    没有新提交就直接结束，完全不打断正在运行的服务。
-  if (isGit && !opts.force) {
+  if (!useTarball && !opts.force) {
     const localRev = gitRev();
     let remoteRev = '';
     try {
@@ -582,7 +584,7 @@ async function cmdUpdate(opts) {
   // 3. 拉代码：git 仓库走 pull，压缩包安装的走「下载最新包 + 覆盖代码文件」
   const beforeRev = isGit ? gitRev() : '';
 
-  if (isGit) {
+  if (!useTarball) {
     let pulled = false;
     try {
       execFileSync('git', ['-C', ROOT, 'pull', '--ff-only'], { stdio: 'inherit', env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } });
@@ -601,6 +603,7 @@ async function cmdUpdate(opts) {
         warn('git pull 没有成功：可能是本地改过文件或网络不通。');
         say('        保留本地改动并重试：先 git stash');
         say('        丢弃本地改动强制更新：./install.sh update --force');
+        say('        走不通 git 但能下载源码包：./install.sh update --tarball');
       }
     }
 
@@ -622,7 +625,7 @@ async function cmdUpdate(opts) {
     const url = process.env.CODECAMP_TARBALL || `https://codeload.github.com/${slug}/tar.gz/refs/heads/${REPO_BRANCH}`;
     const tmp = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cc-update-'));
     try {
-      say(`  当前目录不是 git 仓库，改为下载最新源码包：${url}`);
+      say(`  ${useTarball && isGit ? '按 --tarball 要求改用源码包' : '当前目录不是 git 仓库，改为下载最新源码包'}：${url}`);
       const archive = path.join(tmp, 'src.tar.gz');
       await downloadTo(url, archive);
       const srcDir = extractTar(archive, path.join(tmp, 'x'));
@@ -742,6 +745,7 @@ function cmdHelp() {
     --foreground  前台运行，Ctrl+C 停止
   update        备份数据库 → 拉取最新代码 → 重启（git 与压缩包安装都支持）
     --force       本地改过文件时丢弃改动，强制对齐远端
+    --tarball     改用源码包覆盖（git 拉不动、但能下载源码包时）
     --no-start    只更新代码，不自动重启
   uninstall     停止服务并清理运行状态（默认保留数据）
     --purge       连同 data/（账号、作品、素材）一起删除

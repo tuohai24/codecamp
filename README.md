@@ -98,6 +98,11 @@ curl -fsSL https://raw.githubusercontent.com/tuohai24/codecamp/main/install.sh |
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/tuohai24/codecamp/main/install.ps1))) update
 ```
 
+> 国内网络打不开 `raw.githubusercontent.com` 时，换成 jsDelivr 镜像，效果一样：
+> ```bash
+> curl -fsSL https://cdn.jsdelivr.net/gh/tuohai24/codecamp@main/install.sh | bash -s -- update
+> ```
+
 `update` 做了什么：
 
 1. **先探测**：git 安装只做 `fetch`，远端没有新提交就直接结束——服务完全不断，输出「代码已是最新」。
@@ -111,6 +116,7 @@ curl -fsSL https://raw.githubusercontent.com/tuohai24/codecamp/main/install.sh |
 |---|---|
 | 输出「代码已是最新，服务未中断」 | 已是最新版，无需操作 |
 | 本地改过代码，`pull` 报冲突 | 保留改动：先 `git stash` 再 `update`；丢弃改动：`./install.sh update --force` |
+| git 拉不动（GitHub 被墙 / 超时），但能下源码包 | `./install.sh update --tarball` |
 | 更新后启动失败 | 日志会打印出来，把 `data/backups/<时间戳>/` 里的 db 复制回 `data/` 即可回到旧数据 |
 | 只想要代码不想重启 | `./install.sh update --no-start` |
 
@@ -128,6 +134,7 @@ Windows 把 `./install.sh` 换成 `.\install.ps1`，子命令与参数完全一�
 | `--foreground` | 前台运行，`Ctrl+C` 停止，适合调试或容器 |
 | `--no-start` | 只更新代码，不重启（配合 `update`） |
 | `--force` | `update` 时丢弃本地改动，强制对齐远端（会打印提示） |
+| `--tarball` | `update` 时改用源码包覆盖（git 不通但能下载时） |
 | `--yes` | 缺依赖时自动安装，不再逐项询问 |
 | `--no-install` | 只检查依赖，不自动安装 |
 
