@@ -1,6 +1,6 @@
 {
   "name": "codecamp",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Scratch + Python 在线编程教学与社区平台",
   "main": "server.js",
   "scripts": {

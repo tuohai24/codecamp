@@ -450,15 +450,18 @@ function syncTree(srcDir, destDir) {
 }
 
 async function downloadTo(url, dest) {
-  // 优先用系统工具（能自动走系统代理 / 镜像），最后回退到 Node 自带 fetch
+  // 优先用系统工具（能自动走系统代理 / 镜像）；终端里把进度条放出来，
+  // 源码包有几十 MB，静默下载看起来像卡死。
+  const visible = process.stdout.isTTY;
+  const stdio = visible ? ['ignore', 'inherit', 'inherit'] : 'ignore';
   if (commandExists('curl')) {
     execFileSync('curl', ['-fL', '--retry', '2', '--retry-delay', '1', '--connect-timeout', '15', '-o', dest, url], {
-      stdio: 'ignore',
+      stdio,
     });
     return;
   }
   if (commandExists('wget')) {
-    execFileSync('wget', ['-q', '-O', dest, url], { stdio: 'ignore' });
+    execFileSync('wget', [visible ? '-c' : '-q', '-O', dest, url], { stdio });
     return;
   }
   const res = await fetch(url, { redirect: 'follow' });

@@ -330,23 +330,51 @@ Write-Host "安装目录：$root"
 # 老版本安装自带的 setup.js 可能不支持压缩包更新，更新前先刷新成远端最新版
 if ($wantsUpdate -and -not (Test-Path (Join-Path $root '.git')) -and (Test-Path (Join-Path $root 'scripts\setup.js'))) {
   $slug = $repo -replace '^https://github\.com/', '' -replace '\.git$', '' -replace '/$', ''
+  $setupPath = Join-Path $root 'scripts\setup.js'
+  $local = ''
+  try { $local = Get-Content -LiteralPath $setupPath -Raw -Encoding UTF8 } catch {}
+  $refreshed = $false
+
   $tmpSetup = Join-Path ([IO.Path]::GetTempPath()) ('cc-setup-' + [guid]::NewGuid().ToString('N') + '.js')
   foreach ($raw in @(
       "https://raw.githubusercontent.com/$slug/$branch/scripts/setup.js",
+      "https://fastly.jsdelivr.net/gh/$slug@$branch/scripts/setup.js",
       "https://cdn.jsdelivr.net/gh/$slug@$branch/scripts/setup.js"
     )) {
     if (-not (Get-Remote $raw $tmpSetup)) { continue }
     $text = ''
     try { $text = Get-Content -LiteralPath $tmpSetup -Raw -Encoding UTF8 } catch {}
     if ($text -notmatch 'function cmdUpdate') { continue }
-    $local = ''
-    try { $local = Get-Content -LiteralPath (Join-Path $root 'scripts\setup.js') -Raw -Encoding UTF8 } catch {}
-    if ($local -eq $text) { break }
-    Copy-Item -LiteralPath $tmpSetup -Destination (Join-Path $root 'scripts\setup.js') -Force
+    if ($local -eq $text) { $refreshed = $true; break }
+    Copy-Item -LiteralPath $tmpSetup -Destination $setupPath -Force
     Write-Host '更新脚本已刷新到远端最新版本'
+    $refreshed = $true
     break
   }
   Remove-Item -LiteralPath $tmpSetup -Force -ErrorAction SilentlyContinue
+
+  # 镜像拿不到单文件（大仓库会被 jsDelivr 拒绝）就下源码包，只取 scripts/setup.js
+  if (-not $refreshed) {
+    $tmpZip = Join-Path ([IO.Path]::GetTempPath()) ('cc-setupzip-' + [guid]::NewGuid().ToString('N') + '.zip')
+    $tmpExp = Join-Path ([IO.Path]::GetTempPath()) ('cc-setupzip-' + [guid]::NewGuid().ToString('N'))
+    $zipUrl = if ($env:CODECAMP_ZIP) { $env:CODECAMP_ZIP } else { "https://codeload.github.com/$slug/zip/refs/heads/$branch" }
+    if (Get-Remote $zipUrl $tmpZip) {
+      try {
+        Expand-Archive -LiteralPath $tmpZip -DestinationPath $tmpExp -Force
+        $cand = Get-ChildItem -LiteralPath $tmpExp -Recurse -Filter 'setup.js' -ErrorAction SilentlyContinue |
+          Where-Object { $_.Directory.Name -eq 'scripts' } | Select-Object -First 1
+        if ($cand) {
+          $text = Get-Content -LiteralPath $cand.FullName -Raw -Encoding UTF8
+          if ($text -match 'function cmdUpdate' -and $local -ne $text) {
+            Copy-Item -LiteralPath $cand.FullName -Destination $setupPath -Force
+            Write-Host '更新脚本已从源码包刷新到最新版本'
+          }
+        }
+      } catch {}
+    }
+    Remove-Item -LiteralPath $tmpZip -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $tmpExp -Recurse -Force -ErrorAction SilentlyContinue
+  }
 }
 
 & $node.Exe (Join-Path $root 'scripts\setup.js') @passArgs

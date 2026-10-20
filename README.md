@@ -100,21 +100,25 @@ curl -fsSL https://raw.githubusercontent.com/tuohai24/codecamp/main/install.sh |
 
 > 国内网络打不开 `raw.githubusercontent.com` 时，换成 jsDelivr 镜像，效果一样：
 > ```bash
-> curl -fsSL https://cdn.jsdelivr.net/gh/tuohai24/codecamp@main/install.sh | bash -s -- update
+> curl -fsSL https://fastly.jsdelivr.net/gh/tuohai24/codecamp@main/install.sh | bash -s -- update
 > ```
 
 `update` 做了什么：
 
-1. **先探测**：git 安装只做 `fetch`，远端没有新提交就直接结束——服务完全不断，输出「代码已是最新」。
+1. **先探测**：git 安装只做 `fetch`，远端没有新提交就直接结束——服务完全不断，输出「代码已是最新（v1.1.1 · 3f9c2a1），服务未中断」。
 2. **停服务 + 备份数据库**到 `data/backups/<时间戳>/`（自动只留最近 5 份）。
 3. **换代码**：git 安装走 `pull --ff-only`；压缩包安装（没有 `.git`）自动下载最新源码包，逐文件比对后覆盖，`data/`、`.runtime/` 永远不动。
 4. **重启并自检**：等端口真正响应才算成功，失败会打印日志末尾并提示备份位置；数据库结构变更在启动时自动迁移。
+
+版本号会一起打印出来，例如 `发现新版本：v1.1.0 → v1.1.1`、`版本：v1.1.0 → v1.1.1`。
+确认线上跑的是哪一版有三种方式：首页页脚、管理员后台「系统状态 → 当前版本」、`./install.sh status` 的第一行。
 
 常见情况：
 
 | 情况 | 处理 |
 |---|---|
-| 输出「代码已是最新，服务未中断」 | 已是最新版，无需操作 |
+| 输出「代码已是最新（v… · 提交号），服务未中断」 | 已是最新版，无需操作 |
+| 版本号没变但提示有文件更新 | 属于修 Bug / 改文档的小提交，以提交号与文件清单为准 |
 | 本地改过代码，`pull` 报冲突 | 保留改动：先 `git stash` 再 `update`；丢弃改动：`./install.sh update --force` |
 | git 拉不动（GitHub 被墙 / 超时），但能下源码包 | `./install.sh update --tarball` |
 | 更新后启动失败 | 日志会打印出来，把 `data/backups/<时间戳>/` 里的 db 复制回 `data/` 即可回到旧数据 |

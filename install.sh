@@ -61,6 +61,17 @@ for a in ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}; do
 done
 
 # ---------- 通用小工具 ----------
+# Windows 的 Git Bash 里 TMPDIR 常常是 "C:\Users\...\Temp"，
+# 直接拼 "/xxx" 会得到混合路径，后面 rm 会被安全删除策略拒绝。
+tmpdir() {
+  local d="${TMPDIR:-/tmp}"
+  case "$d" in
+    [A-Za-z]:[\\/]*) d="$(cygpath -u "$d" 2>/dev/null || true)" ;;
+  esac
+  [ -n "$d" ] && [ -d "$d" ] || d=/tmp
+  printf '%s' "$d"
+}
+
 download() { # download <url> <输出文件>
   if command -v curl >/dev/null 2>&1; then
     if [ -t 2 ]; then
@@ -156,7 +167,7 @@ fetch_tarball() {
   slug="${slug%/}"
   url="${CODECAMP_TARBALL:-https://codeload.github.com/$slug/tar.gz/refs/heads/$REPO_BRANCH}"
 
-  tmp="$(mktemp -d "${TMPDIR:-/tmp}/cc-src.XXXXXX")"
+  tmp="$(mktemp -d "$(tmpdir)/cc-src.XXXXXX")"
   say "正在下载源码包 $url"
   if ! download "$url" "$tmp/src.tar.gz"; then
     rm -rf "$tmp"
@@ -247,7 +258,7 @@ detect_platform() {
 
 latest_node_version() {
   local tmp url ver
-  tmp="$(mktemp "${TMPDIR:-/tmp}/cc-nodeidx.XXXXXX")" || return 1
+  tmp="$(mktemp "$(tmpdir)/cc-nodeidx.XXXXXX")" || return 1
   # 官方源优先，国内镜像兜底
   for url in "https://nodejs.org/dist/index.json" "https://npmmirror.com/mirrors/node/index.json"; do
     if download "$url" "$tmp" 2>/dev/null; then
@@ -306,7 +317,7 @@ install_node() {
   esac
   say "  版本 v${ver}（${DIST_OS}-${DIST_ARCH}）"
 
-  tmp="$(mktemp -d "${TMPDIR:-/tmp}/cc-node.XXXXXX")" || return 1
+  tmp="$(mktemp -d "$(tmpdir)/cc-node.XXXXXX")" || return 1
   okdl=""
   for url in "https://nodejs.org/dist/v${ver}/${file}" "https://npmmirror.com/mirrors/node/v${ver}/${file}"; do
     if download "$url" "$tmp/$file"; then
@@ -479,9 +490,10 @@ refresh_setup_js() {
   slug="${REPO_URL#https://github.com/}"
   slug="${slug%.git}"
   slug="${slug%/}"
-  tmp="$(mktemp "${TMPDIR:-/tmp}/cc-setup.XXXXXX")" || return 0
+  tmp="$(mktemp "$(tmpdir)/cc-setup.XXXXXX")" || return 0
   for raw in \
     "https://raw.githubusercontent.com/$slug/$REPO_BRANCH/scripts/setup.js" \
+    "https://fastly.jsdelivr.net/gh/$slug@$REPO_BRANCH/scripts/setup.js" \
     "https://cdn.jsdelivr.net/gh/$slug@$REPO_BRANCH/scripts/setup.js"; do
     if download "$raw" "$tmp" 2>/dev/null && grep -q "function cmdUpdate" "$tmp"; then
       if cmp -s "$tmp" "$ROOT/scripts/setup.js"; then
@@ -494,6 +506,20 @@ refresh_setup_js() {
       fi
     fi
   done
+
+  # 镜像拿不到单文件（大仓库会被 jsDelivr 拒绝）就下源码包，只取 scripts/setup.js
+  local tmpd pkg url
+  tmpd="$(mktemp -d "$(tmpdir)/cc-setupzip.XXXXXX")" || { rm -f "$tmp"; return 0; }
+  url="${CODECAMP_TARBALL:-https://codeload.github.com/$slug/tar.gz/refs/heads/$REPO_BRANCH}"
+  if download "$url" "$tmpd/src.tar.gz" 2>/dev/null && tar -xzf "$tmpd/src.tar.gz" -C "$tmpd" 2>/dev/null; then
+    pkg="$(find "$tmpd" -mindepth 3 -maxdepth 3 -path '*/scripts/setup.js' | head -n 1)"
+    if [ -n "$pkg" ] && grep -q "function cmdUpdate" "$pkg"; then
+      if ! cmp -s "$pkg" "$ROOT/scripts/setup.js"; then
+        cp -f "$pkg" "$ROOT/scripts/setup.js" && say "更新脚本已从源码包刷新到最新版本"
+      fi
+    fi
+  fi
+  rm -rf "$tmpd"
   rm -f "$tmp"
   return 0
 }
