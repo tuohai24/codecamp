@@ -190,10 +190,13 @@ fetch_tarball() {
 }
 
 if [ -z "$ROOT" ]; then
-  if [ -d "$TARGET/.git" ]; then
-    if [ "$WANTS_UPDATE" = 1 ]; then
-      say "检测到已有安装目录 $TARGET，交给更新流程（会先备份数据库）…"
-    elif command -v git >/dev/null 2>&1; then
+  # 更新：只要目标目录里已经是一份完整安装，就交给 update 流程，
+  # 不管它有没有 .git（压缩包安装也需要能一键更新）
+  if [ "$WANTS_UPDATE" = 1 ] && [ -f "$TARGET/server.js" ]; then
+    say "检测到已有安装目录 $TARGET，交给更新流程（会先备份数据库）…"
+    ROOT="$TARGET"
+  elif [ -d "$TARGET/.git" ]; then
+    if command -v git >/dev/null 2>&1; then
       say "检测到已有安装目录 $TARGET，先拉取最新代码…"
       git -C "$TARGET" pull --ff-only || true
     else
@@ -464,5 +467,37 @@ if [ "$HAS_CMD" = 0 ]; then
   PASS_ARGS=("install" ${PASS_ARGS[@]+"${PASS_ARGS[@]}"})
 fi
 
+# 老版本安装自带的 setup.js 可能还不支持「压缩包更新」之类的逻辑，
+# 更新前先把它换成远端最新的一份，避免「自己更不动自己」。
+refresh_setup_js() {
+  local slug raw tmp
+  [ "$WANTS_UPDATE" = 1 ] || return 0
+  # git 安装能靠 pull 自更新，不需要替换（替换反而会让 pull 报本地改动冲突）
+  [ -d "$ROOT/.git" ] && return 0
+  [ -f "$ROOT/scripts/setup.js" ] || return 0
+  can_download || return 0
+  slug="${REPO_URL#https://github.com/}"
+  slug="${slug%.git}"
+  slug="${slug%/}"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/cc-setup.XXXXXX")" || return 0
+  for raw in \
+    "https://raw.githubusercontent.com/$slug/$REPO_BRANCH/scripts/setup.js" \
+    "https://cdn.jsdelivr.net/gh/$slug@$REPO_BRANCH/scripts/setup.js"; do
+    if download "$raw" "$tmp" 2>/dev/null && grep -q "function cmdUpdate" "$tmp"; then
+      if cmp -s "$tmp" "$ROOT/scripts/setup.js"; then
+        rm -f "$tmp"
+        return 0
+      fi
+      if mv -f "$tmp" "$ROOT/scripts/setup.js" 2>/dev/null; then
+        say "更新脚本已刷新到远端最新版本"
+        return 0
+      fi
+    fi
+  done
+  rm -f "$tmp"
+  return 0
+}
+
 say "安装目录：$ROOT"
+refresh_setup_js
 exec "$NODE_BIN" "$ROOT/scripts/setup.js" ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}

@@ -621,7 +621,7 @@ async function system(body) {
         ['数据库', fmtBytes(s.db.size), `WAL ${fmtBytes(s.db.wal)}`],
         ['素材文件', fmtBytes(s.db.uploads), `Scratch 工程 ${fmtBytes(s.db.sb3)}`],
         ['运行时长', fmtUptime(s.uptime), `Node ${s.node}`],
-        ['运行平台', s.platform, '单进程 + SQLite'],
+        ['当前版本', `v${s.version}`, s.platform],
       ]
         .map(
           ([l, v, f]) => `<div class="stat-card"><div class="label">${l}</div><div class="value" style="font-size:19px">${v}</div><div class="foot">${f}</div></div>`

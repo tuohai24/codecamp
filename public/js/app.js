@@ -212,6 +212,9 @@ window.addEventListener('hashchange', route);
     const site = await loadSite();
     document.getElementById('site-name').textContent = site.name;
     document.title = site.name;
+    const ver = document.getElementById('site-ver');
+    if (ver) ver.textContent = site.version ? `CodeCamp v${site.version} · 本地部署` : '';
+    document.querySelector('.brand')?.setAttribute('title', site.version ? `CodeCamp v${site.version}` : 'CodeCamp');
   } catch {}
   await loadMe();
   await route();

@@ -546,11 +546,18 @@ async function cmdUpdate(opts) {
       warn('访问远端仓库失败（网络不通或没有权限），只能按当前代码重启。');
     }
     if (remoteRev && localRev && remoteRev === localRev) {
-      ok(`代码已是最新（${localRev}），服务未中断。`);
+      ok(`代码已是最新（v${oldVersion} · ${localRev}），服务未中断。`);
       say('        想强制重启：node scripts/setup.js restart');
       return;
     }
-    if (remoteRev) say(`  发现新版本：${localRev || '?'} → ${remoteRev}`);
+    if (remoteRev) {
+      let remoteVersion = '';
+      try {
+        remoteVersion = JSON.parse(execFileSync('git', ['-C', ROOT, 'show', 'FETCH_HEAD:package.json'], { encoding: 'utf8' })).version || '';
+      } catch {}
+      const verText = remoteVersion && remoteVersion !== oldVersion ? `v${oldVersion} → v${remoteVersion}` : `v${oldVersion}（版本号未变，以代码为准）`;
+      say(`  发现新版本：${verText}（${localRev || '?'} → ${remoteRev}）`);
+    }
   }
 
   // 2. 停服务 + 备份数据库：新代码有问题时可以把备份放回去
@@ -630,13 +637,19 @@ async function cmdUpdate(opts) {
       await downloadTo(url, archive);
       const srcDir = extractTar(archive, path.join(tmp, 'x'));
       if (!fs.existsSync(path.join(srcDir, 'server.js'))) throw new Error('压缩包里没有 server.js');
+      let remoteVersion = '';
+      try {
+        remoteVersion = JSON.parse(fs.readFileSync(path.join(srcDir, 'package.json'), 'utf8')).version || '';
+      } catch {}
+      if (remoteVersion) say(`  远端版本：v${remoteVersion}`);
       const changed = syncTree(srcDir, ROOT);
       if (changed.length) {
-        ok(`代码已更新：${changed.length} 个文件有变化（data/ 与 .runtime/ 未受影响）`);
+        const verText = remoteVersion && remoteVersion !== oldVersion ? `版本 v${oldVersion} → v${remoteVersion}，` : '';
+        ok(`代码已更新：${verText}${changed.length} 个文件有变化（data/ 与 .runtime/ 未受影响）`);
         changed.slice(0, 12).forEach((n) => say(`        · ${n}`));
         if (changed.length > 12) say(`        · … 另有 ${changed.length - 12} 个文件`);
       } else {
-        ok('代码已是最新（文件与远端一致）');
+        ok(`代码已是最新（v${oldVersion}${remoteVersion && remoteVersion !== oldVersion ? `，远端为 v${remoteVersion}` : ''}，文件与远端一致）`);
       }
     } catch (e) {
       warn(`下载更新失败：${e.message}`);

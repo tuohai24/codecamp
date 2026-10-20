@@ -243,10 +243,12 @@ if (-not $root) { $root = (Get-Location).Path }
 
 if (-not (Test-Path (Join-Path $root 'server.js'))) {
   $git = Get-Command git -ErrorAction SilentlyContinue
-  if (Test-Path (Join-Path $target '.git')) {
-    if ($wantsUpdate) {
-      Write-Host "检测到已有安装目录 $target，交给更新流程（会先备份数据库）…"
-    } elseif ($git) {
+  # 更新：目标目录已有完整安装就交给 update 流程，不管有没有 .git
+  if ($wantsUpdate -and (Test-Path (Join-Path $target 'server.js'))) {
+    Write-Host "检测到已有安装目录 $target，交给更新流程（会先备份数据库）…"
+    $root = $target
+  } elseif (Test-Path (Join-Path $target '.git')) {
+    if ($git) {
       Write-Host "检测到已有安装目录 $target，先拉取最新代码…"
       & git -C $target pull --ff-only
     } else {
@@ -324,6 +326,28 @@ foreach ($a in $passArgs) {
 if (-not $hasCmd) { $passArgs = @('install') + $passArgs }
 
 Write-Host "安装目录：$root"
+
+# 老版本安装自带的 setup.js 可能不支持压缩包更新，更新前先刷新成远端最新版
+if ($wantsUpdate -and -not (Test-Path (Join-Path $root '.git')) -and (Test-Path (Join-Path $root 'scripts\setup.js'))) {
+  $slug = $repo -replace '^https://github\.com/', '' -replace '\.git$', '' -replace '/$', ''
+  $tmpSetup = Join-Path ([IO.Path]::GetTempPath()) ('cc-setup-' + [guid]::NewGuid().ToString('N') + '.js')
+  foreach ($raw in @(
+      "https://raw.githubusercontent.com/$slug/$branch/scripts/setup.js",
+      "https://cdn.jsdelivr.net/gh/$slug@$branch/scripts/setup.js"
+    )) {
+    if (-not (Get-Remote $raw $tmpSetup)) { continue }
+    $text = ''
+    try { $text = Get-Content -LiteralPath $tmpSetup -Raw -Encoding UTF8 } catch {}
+    if ($text -notmatch 'function cmdUpdate') { continue }
+    $local = ''
+    try { $local = Get-Content -LiteralPath (Join-Path $root 'scripts\setup.js') -Raw -Encoding UTF8 } catch {}
+    if ($local -eq $text) { break }
+    Copy-Item -LiteralPath $tmpSetup -Destination (Join-Path $root 'scripts\setup.js') -Force
+    Write-Host '更新脚本已刷新到远端最新版本'
+    break
+  }
+  Remove-Item -LiteralPath $tmpSetup -Force -ErrorAction SilentlyContinue
+}
 
 & $node.Exe (Join-Path $root 'scripts\setup.js') @passArgs
 exit $LASTEXITCODE

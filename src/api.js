@@ -23,6 +23,15 @@ const {
   SOUND_EXTS,
 } = require('./asset-meta');
 
+// 版本号以 package.json 为准：更新脚本、后台、页脚都读同一处
+const VERSION = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')).version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+})();
+
 const UPLOADS = path.join(DATA_DIR, 'uploads');
 fs.mkdirSync(UPLOADS, { recursive: true });
 const SB3_DIR = path.join(DATA_DIR, 'sb3');
@@ -140,6 +149,7 @@ function buildApi(r) {
     getSite(() => ({
       name: getSetting('site_name', 'CodeCamp 少儿编程学堂'),
       slogan: getSetting('site_slogan', ''),
+      version: VERSION,
       allowRegister: getSetting('allow_register', '1') === '1',
       stats: {
         works: db.prepare('SELECT COUNT(*) c FROM projects WHERE published=1').get().c,
@@ -1143,6 +1153,7 @@ function buildApi(r) {
       }
     };
     return {
+      version: VERSION,
       node: process.version,
       platform: `${process.platform}-${process.arch}`,
       uptime: Math.round(process.uptime()),
