@@ -18,13 +18,13 @@ export async function render(root, { query }) {
         </div>
 
         <div class="field">
-          <label>用户名</label>
-          <input id="username" placeholder="字母、数字或下划线" autocomplete="username" />
+          <label for="username">用户名</label>
+          <input id="username" type="text" placeholder="字母、数字或下划线" autocomplete="username" autocapitalize="off" spellcheck="false" />
         </div>
-        ${mode === 'register' ? `<div class="field"><label>昵称</label><input id="nickname" placeholder="展示在作品和评论里" maxlength="20" /></div>` : ''}
+        ${mode === 'register' ? `<div class="field"><label for="nickname">昵称</label><input id="nickname" type="text" placeholder="展示在作品和评论里" maxlength="20" /></div>` : ''}
         <div class="field">
-          <label>密码</label>
-          <input id="password" type="password" placeholder="${mode === 'register' ? '至少 6 位' : '请输入密码'}" autocomplete="current-password" />
+          <label for="password">密码</label>
+          <input id="password" type="password" placeholder="${mode === 'register' ? '至少 6 位' : '请输入密码'}" autocomplete="${mode === 'register' ? 'new-password' : 'current-password'}" />
         </div>
         <button class="btn primary lg" id="submit" style="width:100%">${mode === 'login' ? '登录' : '注册并登录'}</button>
 

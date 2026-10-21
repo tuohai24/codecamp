@@ -1,8 +1,10 @@
-﻿# CodeCamp 一键安装 / 更新 / 卸载（Windows PowerShell）
+﻿# CodeCamp 一键安装 / 管理（Windows PowerShell）
 #
 #   在项目目录里：
-#     .\install.ps1                安装并启动
+#     .\install.ps1                打开管理菜单（安装 / 升级 / 修复 / 卸载都在这里）
+#     .\install.ps1 install        跳过菜单，直接安装并启动
 #     .\install.ps1 update         更新到最新版（自动备份数据）
+#     .\install.ps1 repair         修复安装（体检 + 重启自检）
 #     .\install.ps1 uninstall      卸载（保留数据）
 #     .\install.ps1 status
 #
@@ -40,6 +42,10 @@ $noInstall = $false
 $oldVer = ''
 if ($env:CODECAMP_AUTO_INSTALL -eq '1') { $autoYes = $true }
 
+# 「在终端里直接运行脚本、且一个参数都没带」→ 进管理菜单。
+# 用 irm | iex 运行（拿不到 $PSScriptRoot）时保持一键安装行为。
+$bareMenu = ($args.Count -eq 0) -and $PSScriptRoot -and [Environment]::UserInteractive
+
 # ---------- 解析本脚本自己的参数，其余原样交给 scripts/setup.js ----------
 $passArgs = @()
 foreach ($raw in $args) {
@@ -51,9 +57,9 @@ foreach ($raw in $args) {
     $noInstall = $true
   } elseif ($a -match '^(-h|--help|-\?)$') {
     Write-Host '用法：.\install.ps1 [命令] [选项]'
-    Write-Host '  命令：install（默认）| update | uninstall | start | stop | restart | status | logs | passwd'
+    Write-Host '  命令：menu（菜单）| install（默认）| update | repair | uninstall | start | stop | restart | status | logs | passwd'
     Write-Host '  本脚本选项：--yes 缺依赖自动安装；--no-install 只检查不安装'
-    Write-Host '  其它选项原样传给 setup.js：--port N  --host H  --foreground  --purge  --no-start'
+    Write-Host '  其它选项原样传给 setup.js：--port N  --host H  --foreground  --purge  --no-start  --force  --tarball  --code'
     exit 0
   } else {
     $passArgs += $a
@@ -62,6 +68,7 @@ foreach ($raw in $args) {
 
 # update 时要先停服务、备份数据库再换代码，不能在这里提前 pull
 $wantsUpdate = $passArgs -contains 'update'
+$wantsMenu = $passArgs -contains 'menu'
 
 # ---------- 小工具 ----------
 function Test-VersionOk([string]$ver) {
@@ -317,22 +324,32 @@ if (-not $node) {
 
 Write-Host "  Node.js v$($node.Version)（$($node.Exe)）"
 
-# 不带命令时默认 install（只给了 --port 8080 之类的参数也一样）
-$knownCommands = @('install', 'update', 'uninstall', 'start', 'stop', 'restart', 'status', 'logs', 'passwd', 'help')
+# 不带命令时：终端里直接运行 → 菜单；irm | iex、带参数、非交互 → 直接安装
+$knownCommands = @('menu', 'install', 'update', 'repair', 'uninstall', 'start', 'stop', 'restart', 'status', 'logs', 'passwd', 'help')
 $hasCmd = $false
 foreach ($a in $passArgs) {
   if ($knownCommands -contains $a) { $hasCmd = $true; break }
 }
-if (-not $hasCmd) { $passArgs = @('install') + $passArgs }
+if (-not $hasCmd) {
+  if ($bareMenu) { $passArgs = @('menu') + $passArgs; $wantsMenu = $true }
+  else { $passArgs = @('install') + $passArgs }
+}
 
 Write-Host "安装目录：$root"
 
-# 老版本安装自带的 setup.js 可能不支持压缩包更新，更新前先刷新成远端最新版
-if ($wantsUpdate -and -not (Test-Path (Join-Path $root '.git')) -and (Test-Path (Join-Path $root 'scripts\setup.js'))) {
+# 老版本安装自带的 setup.js 可能不支持压缩包更新 / 管理菜单，需要时先刷新成远端最新版
+$setupPath = Join-Path $root 'scripts\setup.js'
+$needRefresh = $false
+$setupText = ''
+if (Test-Path $setupPath) {
+  try { $setupText = Get-Content -LiteralPath $setupPath -Raw -Encoding UTF8 } catch {}
+  if ($wantsUpdate) { $needRefresh = $true }
+  elseif ($wantsMenu -and $setupText -notmatch 'function cmdMenu') { $needRefresh = $true }
+}
+
+if ($needRefresh -and -not (Test-Path (Join-Path $root '.git'))) {
   $slug = $repo -replace '^https://github\.com/', '' -replace '\.git$', '' -replace '/$', ''
-  $setupPath = Join-Path $root 'scripts\setup.js'
-  $local = ''
-  try { $local = Get-Content -LiteralPath $setupPath -Raw -Encoding UTF8 } catch {}
+  $local = $setupText
   $refreshed = $false
 
   $tmpSetup = Join-Path ([IO.Path]::GetTempPath()) ('cc-setup-' + [guid]::NewGuid().ToString('N') + '.js')
@@ -377,5 +394,17 @@ if ($wantsUpdate -and -not (Test-Path (Join-Path $root '.git')) -and (Test-Path 
   }
 }
 
-& $node.Exe (Join-Path $root 'scripts\setup.js') @passArgs
+# 极老的安装且刷新失败时，别卡在「未知命令」上，退回默认安装流程
+if ($wantsMenu) {
+  $nowText = ''
+  try { $nowText = Get-Content -LiteralPath $setupPath -Raw -Encoding UTF8 } catch {}
+  if ($nowText -notmatch 'function cmdMenu') {
+    Write-Host ''
+    Write-Host '当前这份安装脚本还不支持菜单，先升级一次就能用：.\install.ps1 update' -ForegroundColor Yellow
+    Write-Host '本次按默认流程继续安装 / 启动。'
+    $passArgs = @('install') + @($passArgs | Where-Object { $_ -ne 'menu' })
+  }
+}
+
+& $node.Exe $setupPath @passArgs
 exit $LASTEXITCODE

@@ -18,7 +18,13 @@ cd codecamp
 ./install.sh
 ```
 
-也可以不手动 clone，一条命令装到 `~/codecamp`：
+运行后会打开**管理菜单**，输入 `1` 即可安装并启动。想跳过菜单直接装：
+
+```bash
+./install.sh install
+```
+
+也可以不手动 clone，一条命令装到 `~/codecamp`（远程管道执行不会进菜单，直接安装）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tuohai24/codecamp/main/install.sh | bash
@@ -31,6 +37,8 @@ git clone https://github.com/tuohai24/codecamp codecamp
 cd codecamp
 .\install.ps1
 ```
+
+同样会先进管理菜单（选 `1` 安装）；跳过菜单用 `.\install.ps1 install`。
 
 不手动 clone，一条命令装到 `%USERPROFILE%\codecamp`：
 
@@ -45,6 +53,38 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
 安装脚本只做四件事：检查 Node.js ≥ 22.5 → 建好 `data/` → 首次启动自动初始化数据库 → 后台拉起服务并打印访问地址。项目零依赖，**不需要 `npm install`**。
+
+### 管理菜单（安装 / 升级 / 修复 / 卸载都在这里）
+
+在安装目录直接运行 `./install.sh`（Windows 用 `.\install.ps1`）即可打开菜单，不用记子命令：
+
+```
+================================================
+  CodeCamp v1.2.0  管理菜单
+------------------------------------------------
+  状态   运行中（PID 14496）
+  地址   http://127.0.0.1:3000
+  目录   /home/you/codecamp
+  数据   data/ 与 .runtime/（升级、卸载默认保留）
+================================================
+   1) 安装 / 启动         首次安装，或服务停着时启动服务
+   2) 运行状态            版本、端口、进程、健康检查、数据体积
+   3) 升级到最新版        先备份数据库，再更新代码并重启
+   4) 修复安装            体检目录 / 配置 / 进程 / 数据库并重启
+   5) 重启服务            改了配置或服务卡住时用
+   6) 停止服务            数据不会动
+   7) 查看日志            最近 80 行运行日志
+   8) 重置账号密码        忘记密码时用
+   9) 卸载（保留数据）    停服务、清运行状态，账号作品都在
+  10) 卸载并删除数据      连账号、作品、素材一起删除，不可恢复
+   0) 退出
+```
+
+- 菜单顶部永远显示当前**版本 / 运行状态 / 访问地址**，选完一项执行完会回到菜单，可以连续操作。
+- 某一项失败只会提示 `[失败]`，不会把整个菜单关掉；按回车继续。
+- `3) 升级` 会问升级方式（回车默认 / `f` 丢弃本地改动 / `t` 用源码包），和 `update --force`、`update --tarball` 等价。
+- `4) 修复` 会问是否从官方仓库补齐代码文件（等价 `repair --code`），适合「文件被误删 / 配置写坏 / 进程卡死」的情况。
+- 非交互环境（CI、`curl | bash`、重定向输入）不会进菜单，直接执行默认的安装流程；也可以用 `./install.sh menu` 显式进入。
 
 ### 缺依赖时怎么办（脚本会自动装）
 
@@ -70,14 +110,28 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ### 安装之后
 
 ```bash
+./install.sh                 # 管理菜单（推荐，安装/升级/修复/卸载都在里面）
 ./install.sh status          # 运行状态（进程 / 端口 / 健康检查 / 数据体积）
 ./install.sh logs            # 最近 80 行日志
 ./install.sh restart         # 重启
 ./install.sh update          # 更新到最新版（备份数据库 → 拉代码 → 重启）
+./install.sh repair          # 修复安装（补目录 / 清残留 PID / 查库 / 重启自检）
 ./install.sh uninstall       # 卸载：停服务、清运行状态，数据保留
 ./install.sh uninstall --purge   # 连同 data/ 一起删除（不可恢复）
 ./install.sh passwd admin 新密码  # 重置某个账号的密码
 ```
+
+### 修复安装
+
+服务起不来、端口没响应、文件被误删时先跑这个，它会依次体检并顺手修掉：
+
+```bash
+./install.sh repair            # 体检 + 修复 + 重启自检
+./install.sh repair --code     # 再从官方仓库补齐缺失的代码文件（data/ 不动）
+./install.sh repair --no-start # 只体检不启动
+```
+
+检查项：Node 版本、`data/` 等目录是否齐全、`.runtime` 里的残留 PID、端口/监听地址配置是否合法、关键代码文件是否缺失、数据库能否正常读取（带账号数量）、端口是否被别的程序占用，最后重启并等到端口真正响应才算成功。
 
 ### 更新到新版本
 
@@ -105,12 +159,12 @@ curl -fsSL https://raw.githubusercontent.com/tuohai24/codecamp/main/install.sh |
 
 `update` 做了什么：
 
-1. **先探测**：git 安装只做 `fetch`，远端没有新提交就直接结束——服务完全不断，输出「代码已是最新（v1.1.1 · 3f9c2a1），服务未中断」。
+1. **先探测**：git 安装只做 `fetch`，远端没有新提交就直接结束——服务完全不断，输出「代码已是最新（v1.2.0 · 3f9c2a1），服务未中断」。
 2. **停服务 + 备份数据库**到 `data/backups/<时间戳>/`（自动只留最近 5 份）。
 3. **换代码**：git 安装走 `pull --ff-only`；压缩包安装（没有 `.git`）自动下载最新源码包，逐文件比对后覆盖，`data/`、`.runtime/` 永远不动。
 4. **重启并自检**：等端口真正响应才算成功，失败会打印日志末尾并提示备份位置；数据库结构变更在启动时自动迁移。
 
-版本号会一起打印出来，例如 `发现新版本：v1.1.0 → v1.1.1`、`版本：v1.1.0 → v1.1.1`。
+版本号会一起打印出来，例如 `发现新版本：v1.1.1 → v1.2.0`、`版本：v1.1.1 → v1.2.0`。
 确认线上跑的是哪一版有三种方式：首页页脚、管理员后台「系统状态 → 当前版本」、`./install.sh status` 的第一行。
 
 常见情况：
@@ -136,9 +190,10 @@ Windows 把 `./install.sh` 换成 `.\install.ps1`，子命令与参数完全一�
 | `--port 8080` | 指定端口（默认 3000） |
 | `--host 127.0.0.1` | 只监听本机（默认 `0.0.0.0`，对外提供服务） |
 | `--foreground` | 前台运行，`Ctrl+C` 停止，适合调试或容器 |
-| `--no-start` | 只更新代码，不重启（配合 `update`） |
+| `--no-start` | 只更新代码 / 只体检，不重启（配合 `update`、`repair`） |
 | `--force` | `update` 时丢弃本地改动，强制对齐远端（会打印提示） |
 | `--tarball` | `update` 时改用源码包覆盖（git 不通但能下载时） |
+| `--code` | `repair` 时从官方仓库补齐缺失的代码文件（`data/` 不动） |
 | `--yes` | 缺依赖时自动安装，不再逐项询问 |
 | `--no-install` | 只检查依赖，不自动安装 |
 

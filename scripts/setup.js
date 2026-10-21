@@ -30,14 +30,24 @@ const MIN_NODE = 22.5;
 
 const isWin = process.platform === 'win32';
 
+// Node 22/23 上 require('node:sqlite') 会打一条 ExperimentalWarning，
+// 在命令行工具里这行只会干扰输出（服务端日志里保留原样，方便排查）。
+process.removeAllListeners('warning');
+process.on('warning', (w) => {
+  if (w && w.name !== 'ExperimentalWarning') process.stderr.write(`(警告) ${w.message}\n`);
+});
+
 /* ------------------------------- 小工具 ------------------------------- */
 
 const say = (msg = '') => process.stdout.write(msg + '\n');
 const ok = (msg) => say('  [ok] ' + msg);
 const warn = (msg) => say('  [注意] ' + msg);
+
+// 命令内部报错一律抛这个错误：菜单模式下可以「报错 → 回到菜单」，
+// 而不是像 process.exit 那样把整个交互界面一起关掉。
+class SetupError extends Error {}
 const fail = (msg) => {
-  say('  [失败] ' + msg);
-  process.exit(1);
+  throw new SetupError(msg);
 };
 
 function sleep(ms) {
@@ -138,10 +148,24 @@ function probe(port, timeout = 1200) {
 
 function ask(question) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => rl.question(question, (a) => {
-    rl.close();
-    resolve(a.trim());
-  }));
+  return new Promise((resolve) => {
+    let answered = false;
+    // 菜单里按 Ctrl+C 不应该抛一堆栈，直接干净退出
+    rl.on('SIGINT', () => {
+      rl.close();
+      say('');
+      process.exit(0);
+    });
+    rl.question(question, (a) => {
+      answered = true;
+      rl.close();
+      resolve(a.trim());
+    });
+    // 输入被关闭（管道 / Ctrl+D）时给出空串，由调用方决定怎么处理
+    rl.on('close', () => {
+      if (!answered) resolve('');
+    });
+  });
 }
 
 function parseArgs(argv) {
@@ -352,6 +376,13 @@ async function cmdStatus() {
   if (!pid && !up) say('\n  启动：node scripts/setup.js start');
 }
 
+function humanSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function sizeOf(dir) {
   let total = 0;
   const walk = (p) => {
@@ -519,6 +550,28 @@ function pruneBackups(keep = 5) {
   } catch {}
 }
 
+// 下载最新源码包 → 逐文件比对 → 覆盖代码（data/、.runtime/ 等受保护目录不动）
+async function fetchAndSyncCode() {
+  const slug = REPO_URL.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '');
+  const url = process.env.CODECAMP_TARBALL || `https://codeload.github.com/${slug}/tar.gz/refs/heads/${REPO_BRANCH}`;
+  const tmp = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cc-update-'));
+  try {
+    const archive = path.join(tmp, 'src.tar.gz');
+    await downloadTo(url, archive);
+    const srcDir = extractTar(archive, path.join(tmp, 'x'));
+    if (!fs.existsSync(path.join(srcDir, 'server.js'))) throw new Error('压缩包里没有 server.js');
+    let remoteVersion = '';
+    try {
+      remoteVersion = JSON.parse(fs.readFileSync(path.join(srcDir, 'package.json'), 'utf8')).version || '';
+    } catch {}
+    return { url, remoteVersion, changed: syncTree(srcDir, ROOT) };
+  } finally {
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    } catch {}
+  }
+}
+
 async function cmdUpdate(opts) {
   const oldVersion = pkgVersion();
   say(`更新 CodeCamp（当前 v${oldVersion}）`);
@@ -633,19 +686,10 @@ async function cmdUpdate(opts) {
     // 压缩包 / 手动解压安装：下载最新源码包，逐个文件比对后覆盖
     const slug = REPO_URL.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '');
     const url = process.env.CODECAMP_TARBALL || `https://codeload.github.com/${slug}/tar.gz/refs/heads/${REPO_BRANCH}`;
-    const tmp = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'cc-update-'));
     try {
       say(`  ${useTarball && isGit ? '按 --tarball 要求改用源码包' : '当前目录不是 git 仓库，改为下载最新源码包'}：${url}`);
-      const archive = path.join(tmp, 'src.tar.gz');
-      await downloadTo(url, archive);
-      const srcDir = extractTar(archive, path.join(tmp, 'x'));
-      if (!fs.existsSync(path.join(srcDir, 'server.js'))) throw new Error('压缩包里没有 server.js');
-      let remoteVersion = '';
-      try {
-        remoteVersion = JSON.parse(fs.readFileSync(path.join(srcDir, 'package.json'), 'utf8')).version || '';
-      } catch {}
+      const { changed, remoteVersion } = await fetchAndSyncCode();
       if (remoteVersion) say(`  远端版本：v${remoteVersion}`);
-      const changed = syncTree(srcDir, ROOT);
       if (changed.length) {
         const verText = remoteVersion && remoteVersion !== oldVersion ? `版本 v${oldVersion} → v${remoteVersion}，` : '';
         ok(`代码已更新：${verText}${changed.length} 个文件有变化（data/ 与 .runtime/ 未受影响）`);
@@ -657,10 +701,6 @@ async function cmdUpdate(opts) {
     } catch (e) {
       warn(`下载更新失败：${e.message}`);
       say('        可以手动下载解压覆盖到本目录（保留 data/ 不动），或先安装 git 后重试。');
-    } finally {
-      try {
-        fs.rmSync(tmp, { recursive: true, force: true });
-      } catch {}
     }
   }
 
@@ -683,6 +723,167 @@ async function cmdUpdate(opts) {
   say('');
   if (oldVersion !== newVersion) ok(`版本：v${oldVersion} → v${newVersion}`);
   if (backupDone) say(`  数据备份：${backup}`);
+}
+
+/* ------------------------------ 修复安装 ------------------------------ */
+
+// 只读打开数据库做一次快速体检；服务在跑也能查（WAL 模式支持并发读）
+function dbQuickCheck(file) {
+  let db;
+  try {
+    const { DatabaseSync } = require('node:sqlite');
+    db = new DatabaseSync(file, { readOnly: true });
+    const row = db.prepare('PRAGMA quick_check').get();
+    const verdict = row ? String(Object.values(row)[0] ?? '') : '';
+    let users = null;
+    try {
+      users = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
+    } catch {}
+    return { ok: verdict === '' || verdict.toLowerCase() === 'ok', verdict: verdict || 'ok', users };
+  } catch (e) {
+    return { ok: false, verdict: e.message };
+  } finally {
+    try {
+      db && db.close();
+    } catch {}
+  }
+}
+
+async function cmdRepair(opts) {
+  say(`修复 CodeCamp 安装（v${pkgVersion()}）`);
+  say('----------------------------------------');
+  checkNode();
+
+  const fixed = [];
+  const broken = [];
+
+  // 1. 目录结构：缺什么补什么（数据不会被动到）
+  for (const dir of [RUNTIME, DATA_DIR, LOG_DIR, path.join(DATA_DIR, 'uploads'), path.join(DATA_DIR, 'sb3')]) {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      fixed.push(`补建目录 ${path.relative(ROOT, dir) || dir}`);
+    }
+  }
+  if (!fixed.length) ok('目录结构完整');
+
+  // 2. 进程状态：PID 文件指向一个已经不存在的进程时清掉
+  const stalePid = readPid();
+  if (stalePid && !alive(stalePid)) {
+    try {
+      fs.rmSync(PID_FILE, { force: true });
+    } catch {}
+    fixed.push(`清理残留 PID 文件（进程 ${stalePid} 已不存在）`);
+  }
+
+  // 3. 配置：端口 / 监听地址不合法就重置
+  let conf = loadConf();
+  let port = Number(conf.port || 3000);
+  const host = String(conf.host || '0.0.0.0');
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    conf = saveConf({ port: 3000 });
+    port = 3000;
+    fixed.push('端口配置不合法，已重置为 3000');
+  }
+  if (!conf.version) saveConf({ version: pkgVersion() });
+  ok(`配置正常（${host}:${port}）`);
+
+  // 4. 代码完整性
+  const required = ['server.js', 'package.json', 'src/api.js', 'src/db.js', 'src/auth.js', 'public/index.html', 'scripts/setup.js'];
+  const missing = required.filter((rel) => !fs.existsSync(path.join(ROOT, rel)));
+  if (!missing.length) {
+    ok('代码文件完整');
+  } else {
+    warn(`缺少关键文件：${missing.join('、')}`);
+    broken.push('代码文件缺失');
+    if (!opts.code) say('        加 --code 可以从官方仓库补齐：./install.sh repair --code');
+  }
+
+  // 5. 数据库
+  const dbFile = path.join(DATA_DIR, 'codecamp.db');
+  if (fs.existsSync(dbFile)) {
+    let dbSize = '';
+    try {
+      dbSize = humanSize(fs.statSync(dbFile).size);
+    } catch {}
+    const res = dbQuickCheck(dbFile);
+    if (res.ok) {
+      const bits = [];
+      if (dbSize) bits.push(dbSize);
+      if (typeof res.users === 'number') bits.push(`${res.users} 个账号`);
+      ok(`数据库可读${bits.length ? `（${bits.join('，')}）` : ''}`);
+    } else {
+      warn(`数据库体检未通过：${res.verdict}`);
+      const backups = path.join(DATA_DIR, 'backups');
+      let latest = '';
+      try {
+        latest = fs
+          .readdirSync(backups, { withFileTypes: true })
+          .filter((e) => e.isDirectory())
+          .map((e) => e.name)
+          .sort()
+          .pop();
+      } catch {}
+      if (latest) say(`        可回滚到备份：${path.relative(ROOT, path.join(backups, latest))}/ 里的 db 复制回 data/`);
+      else say('        还没有可用备份，建议先停服并复制 data/ 目录留档');
+      broken.push('数据库异常');
+    }
+  } else {
+    say('  还没有数据库文件（首次启动会自动初始化演示数据）');
+  }
+
+  // 6. 端口冲突：被别的程序占了，重启也起不来，先说清楚
+  const occupied = !(await portFree(port, host)) && !(await probe(port));
+  if (occupied) {
+    warn(`端口 ${port} 被其它程序占用`);
+    broken.push('端口被占用');
+  }
+
+  // 7. 缺文件时可以选择从官方仓库重新同步代码（只覆盖代码，不动数据）
+  if (missing.length && opts.code) {
+    say('  正在从官方仓库重新同步代码文件…');
+    try {
+      const { changed, remoteVersion } = await fetchAndSyncCode();
+      ok(`已同步 ${changed.length} 个文件${remoteVersion ? `（远端 v${remoteVersion}）` : ''}，data/ 与 .runtime/ 未受影响`);
+      fixed.push('从远端补齐代码文件');
+      const stillMissing = required.filter((rel) => !fs.existsSync(path.join(ROOT, rel)));
+      if (!stillMissing.length) {
+        const i = broken.indexOf('代码文件缺失');
+        if (i >= 0) broken.splice(i, 1);
+      }
+    } catch (e) {
+      warn(`同步代码失败：${e.message}`);
+    }
+  }
+
+  // 8. 重启并自检：修复的最终目的就是让服务真的能用
+  if (opts['no-start']) {
+    say('  已按 --no-start 跳过启动。');
+  } else if (broken.includes('端口被占用')) {
+    warn('端口冲突未解决，暂不启动。换端口：./install.sh install --port 3001');
+  } else {
+    const wasRunning = !!runningPid();
+    if (wasRunning) await stopServer(true);
+    const pid = startServer(port, host, false);
+    say('  正在启动并自检…');
+    if (!(await waitReady(port))) {
+      warn('启动后端口没有响应，日志末尾：');
+      say(tailLog(25));
+      say('');
+      say('  常见原因：端口冲突 / 代码文件损坏 / 数据目录没有写权限。');
+      fail('修复未能让服务正常启动。');
+    }
+    ok(`服务已就绪（PID ${pid}）：${serviceUrl({ port, host })}`);
+  }
+
+  say('');
+  if (fixed.length) {
+    say('  本次修复：');
+    fixed.forEach((f) => say(`    · ${f}`));
+  } else {
+    say('  没有发现需要修复的问题。');
+  }
+  if (broken.length) say(`  仍需注意：${broken.join('、')}`);
+  say('  数据未做任何删除；版本 v' + pkgVersion());
 }
 
 async function cmdUninstall(opts) {
@@ -749,12 +950,127 @@ async function cmdPasswd(opts) {
   ok(`已更新 ${username} 的密码`);
 }
 
+/* ------------------------------- 交互菜单 ------------------------------- */
+
+// 中文是双宽字符，按显示宽度补空格菜单才会对齐
+const dispWidth = (s) => [...s].reduce((n, ch) => n + (/[\u1100-\uFFEF]/.test(ch) ? 2 : 1), 0);
+const padW = (s, w) => s + ' '.repeat(Math.max(2, w - dispWidth(s)));
+
+async function menuInstall() {
+  const conf = loadConf();
+  const fallback = Number(conf.port || 3000);
+  const input = (await ask(`  端口（回车用 ${fallback}）：`)).trim();
+  const port = input ? Number(input) : fallback;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) fail(`端口不合法：${input}`);
+  await cmdInstall({ _: [], port: String(port), host: String(conf.host || '0.0.0.0') });
+}
+
+async function menuUpdate() {
+  const ans = (await ask('  升级方式（回车默认 / f 丢弃本地改动 / t 用源码包）：')).toLowerCase();
+  await cmdUpdate({ force: ans === 'f', tarball: ans === 't' });
+}
+
+async function menuRepair() {
+  const ans = (await ask('  是否从官方仓库补齐代码文件？[y/N] ')).toLowerCase();
+  await cmdRepair({ code: ans === 'y' || ans === 'yes' });
+}
+
+async function menuPasswd() {
+  const username = (await ask('  用户名（如 admin）：')).trim();
+  if (!username) {
+    say('  已取消。');
+    return;
+  }
+  const password = (await ask('  新密码（至少 6 位，输入时可见）：')).trim();
+  if (!password) {
+    say('  已取消。');
+    return;
+  }
+  await cmdPasswd({ _: [username, password] });
+}
+
+const MENU = [
+  { key: '1', label: '安装 / 启动', hint: '首次安装，或服务停着时启动服务', run: menuInstall },
+  { key: '2', label: '运行状态', hint: '版本、端口、进程、健康检查、数据体积', run: () => cmdStatus() },
+  { key: '3', label: '升级到最新版', hint: '先备份数据库，再更新代码并重启', run: menuUpdate },
+  { key: '4', label: '修复安装', hint: '体检目录 / 配置 / 进程 / 数据库并重启', run: menuRepair },
+  { key: '5', label: '重启服务', hint: '改了配置或服务卡住时用', run: () => cmdRestart() },
+  { key: '6', label: '停止服务', hint: '数据不会动', run: () => cmdStop() },
+  { key: '7', label: '查看日志', hint: '最近 80 行运行日志', run: () => cmdLogs() },
+  { key: '8', label: '重置账号密码', hint: '忘记密码时用', run: menuPasswd },
+  { key: '9', label: '卸载（保留数据）', hint: '停服务、清运行状态，账号作品都在', run: () => cmdUninstall({ purge: false }) },
+  { key: '10', label: '卸载并删除数据', hint: '连账号、作品、素材一起删除，不可恢复', run: () => cmdUninstall({ purge: true }) },
+];
+
+async function paintMenu() {
+  const conf = loadConf();
+  const port = Number(conf.port || 3000);
+  const pid = runningPid();
+  const up = await probe(port);
+  const state = pid
+    ? up
+      ? `运行中（PID ${pid}）`
+      : `进程在（PID ${pid}）但端口无响应 · 建议先「修复安装」`
+    : up
+      ? '端口有响应（但不是本目录启动的）'
+      : '未运行';
+
+  say('');
+  say('================================================');
+  say(`  CodeCamp v${pkgVersion()}  管理菜单`);
+  say('------------------------------------------------');
+  say(`  状态   ${state}`);
+  say(`  地址   ${serviceUrl(conf)}`);
+  say(`  目录   ${ROOT}`);
+  say('  数据   data/ 与 .runtime/（升级、卸载默认保留）');
+  say('================================================');
+  for (const m of MENU) say(`  ${m.key.padStart(2)}) ${padW(m.label, 20)}${m.hint}`);
+  say('   0) 退出');
+  say('');
+}
+
+async function cmdMenu() {
+  if (!process.stdin.isTTY) {
+    say('菜单需要在交互式终端里运行：在安装目录直接执行 ./install.sh 或 .\\install.ps1。');
+    say('非交互环境请直接用子命令：install | update | repair | uninstall | status …');
+    return;
+  }
+
+  for (;;) {
+    await paintMenu();
+    const ans = (await ask('  请输入编号（回车刷新，0 退出）：')).toLowerCase();
+    if (!ans) continue;
+    if (ans === '0' || ans === 'q' || ans === 'quit' || ans === 'exit') {
+      say('  已退出。');
+      return;
+    }
+    const item = MENU.find((m) => m.key === ans);
+    if (!item) {
+      say(`  没有「${ans}」这个选项，输入 0 退出。`);
+      continue;
+    }
+    say('');
+    try {
+      await item.run();
+    } catch (e) {
+      // 菜单模式下单步失败不影响继续操作
+      if (e instanceof SetupError) say('  [失败] ' + e.message);
+      else say('  出错了：' + (e && e.message ? e.message : String(e)));
+    }
+    say('');
+    await ask('  按回车返回菜单 ');
+    if (!process.stdin.isTTY) return;
+  }
+}
+
 function cmdHelp() {
   say(`CodeCamp v${pkgVersion()} 管理脚本
 
 用法：node scripts/setup.js <命令> [选项]
+      node scripts/setup.js            在交互式终端里打开管理菜单
 
 命令：
+  menu          管理菜单（安装 / 升级 / 修复 / 卸载都在这一个界面里）
   install       安装并后台启动（默认端口 3000，监听 0.0.0.0）
     --port N      指定端口
     --host H      监听地址（默认 0.0.0.0，只给本机用可填 127.0.0.1）
@@ -763,6 +1079,9 @@ function cmdHelp() {
     --force       本地改过文件时丢弃改动，强制对齐远端
     --tarball     改用源码包覆盖（git 拉不动、但能下载源码包时）
     --no-start    只更新代码，不自动重启
+  repair        体检查目录 / 配置 / PID / 数据库，补缺失目录并重启自检
+    --code        从官方仓库重新同步代码文件（不动 data/）
+    --no-start    只体检和修复，不启动服务
   uninstall     停止服务并清理运行状态（默认保留数据）
     --purge       连同 data/（账号、作品、素材）一起删除
     --yes         跳过确认
@@ -770,8 +1089,10 @@ function cmdHelp() {
   passwd <用户名> <新密码>    重置某个账号的密码
 
 示例：
+  node scripts/setup.js menu
   node scripts/setup.js install --port 8080
   node scripts/setup.js update
+  node scripts/setup.js repair --code
   node scripts/setup.js uninstall --purge`);
 }
 
@@ -782,6 +1103,8 @@ function cmdHelp() {
   const opts = parseArgs(argv);
   const cmd = opts._.shift() || 'help';
   switch (cmd) {
+    case 'menu':
+      return cmdMenu();
     case 'install':
       return cmdInstall(opts);
     case 'start':
@@ -796,6 +1119,8 @@ function cmdHelp() {
       return cmdLogs();
     case 'update':
       return cmdUpdate(opts);
+    case 'repair':
+      return cmdRepair(opts);
     case 'uninstall':
       return cmdUninstall(opts);
     case 'passwd':
@@ -803,6 +1128,8 @@ function cmdHelp() {
     case 'help':
     case '--help':
     case '-h':
+      // 不带任何参数的交互式调用直接进菜单，比先看帮助再敲命令顺手
+      if (!argv.length && process.stdin.isTTY) return cmdMenu();
       return cmdHelp();
     default:
       say(`未知命令：${cmd}`);
@@ -811,6 +1138,10 @@ function cmdHelp() {
   }
 })().catch((e) => {
   say('');
-  say('出错了：' + (e && e.message ? e.message : String(e)));
+  if (e instanceof SetupError) {
+    say('  [失败] ' + e.message);
+  } else {
+    say('出错了：' + (e && e.message ? e.message : String(e)));
+  }
   process.exit(1);
 });

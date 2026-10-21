@@ -150,7 +150,9 @@ header.topbar {
 .nav a.active { color: var(--brand); background: var(--brand-soft); }
 .topbar .spacer { flex: 1; }
 .searchbox { position: relative; width: 220px; }
-.searchbox input {
+/* 选择器要带上 [type="text"] / :not([type])：否则通用规则（同样 0,1,1）
+   写在后面会盖掉这里的左内边距，放大镜图标就会压住文字。 */
+.searchbox input[type="text"], .searchbox input:not([type]) {
   width: 100%; height: 36px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--input); padding: 0 12px 0 34px; outline: none; transition: 0.16s;
 }
@@ -252,9 +254,27 @@ header.topbar {
 /* ---------------- 表单 ---------------- */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field > label { font-size: 13px; font-weight: 600; color: var(--text-2); }
-.input, input[type="text"], input[type="password"], input[type="number"], input[type="date"], input[type="search"], select, textarea {
+/* 注意：必须带 input:not([type])，否则没写 type 的 <input>（默认就是 text）
+   匹配不到任何规则，会出现「输入框没有边框和背景」的情况。 */
+.input,
+input:not([type]),
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="search"],
+input[type="email"],
+input[type="tel"],
+input[type="url"],
+select,
+textarea {
   height: 38px; border-radius: 10px; border: 1px solid var(--border); background: var(--input);
   padding: 0 12px; outline: none; transition: 0.16s; width: 100%; color: var(--text);
+  font-size: 14px;
+}
+.input::placeholder, input::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.85; }
+.input:hover, input:not([type]):hover, input[type="text"]:hover, input[type="password"]:hover, input[type="number"]:hover, input[type="search"]:hover, input[type="email"]:hover, textarea:hover, select:hover {
+  border-color: var(--brand-line);
 }
 textarea { height: auto; min-height: 92px; padding: 10px 12px; resize: vertical; line-height: 1.6; }
 .input:focus, input:focus, select:focus, textarea:focus {

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# CodeCamp 一键安装 / 更新 / 卸载（Linux / macOS / Windows Git Bash）
+# CodeCamp 一键安装 / 管理（Linux / macOS / Windows Git Bash）
 #
-#   在项目目录里：   ./install.sh              # 安装并启动
-#                    ./install.sh update       # 更新到最新版（自动备份数据）
-#                    ./install.sh uninstall    # 卸载（保留数据）
-#                    ./install.sh status
+#   在项目目录里直接运行：  ./install.sh          # 打开管理菜单（安装/升级/修复/卸载…）
+#                           ./install.sh install  # 跳过菜单，直接安装并启动
+#                           ./install.sh update   # 更新到最新版（自动备份数据）
+#                           ./install.sh repair   # 修复安装（体检 + 重启自检）
+#                           ./install.sh uninstall  # 卸载（保留数据）
+#                           ./install.sh status
 #
 #   远程一键安装：   curl -fsSL https://raw.githubusercontent.com/tuohai24/codecamp/main/install.sh | bash
 #   远程一键更新：   curl -fsSL https://raw.githubusercontent.com/tuohai24/codecamp/main/install.sh | bash -s -- update
@@ -29,6 +31,14 @@ ASSUME_YES=0
 NO_INSTALL=0
 if [ "${CODECAMP_AUTO_INSTALL:-0}" = "1" ]; then ASSUME_YES=1; fi
 
+# 判断是不是「在终端里直接运行脚本、且一个参数都没带」：
+# 这种情况进管理菜单；curl | bash 拿不到脚本文件，保持原来的一键安装行为。
+BARE_MENU=0
+if [ "$#" -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then
+  _self="${BASH_SOURCE[0]:-}"
+  if [ -n "$_self" ] && [ -f "$_self" ]; then BARE_MENU=1; fi
+fi
+
 say() { printf '%s\n' "$*"; }
 
 # ---------- 解析本脚本自己的参数，其余原样交给 scripts/setup.js ----------
@@ -46,7 +56,8 @@ for arg in "$@"; do
       # 打印脚本开头的注释作为帮助（从第 2 行起，遇到第一行非注释就停）
       awk 'NR > 1 { if (/^#/) { sub(/^# ?/, ""); print; next } else exit }' "$0" 2>/dev/null || true
       say ""
-      say "交给 setup.js 的参数：--port N   --host H   --foreground   --purge   --no-start   --yes"
+      say "子命令：menu（菜单） install update repair uninstall start stop restart status logs passwd"
+      say "交给 setup.js 的参数：--port N   --host H   --foreground   --purge   --no-start   --yes   --force   --tarball   --code"
       exit 0
       ;;
     *) PASS_ARGS+=("$arg") ;;
@@ -56,8 +67,10 @@ done
 # update 时不能在装依赖前就 git pull：要先停服务、备份数据库，再换代码。
 # 这里只解析意图，真正的拉取交给 scripts/setup.js 的 update 命令。
 WANTS_UPDATE=0
+WANTS_MENU=0
 for a in ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}; do
   [ "$a" = "update" ] && WANTS_UPDATE=1
+  [ "$a" = "menu" ] && WANTS_MENU=1
 done
 
 # ---------- 通用小工具 ----------
@@ -464,28 +477,39 @@ say "CodeCamp 运行环境检查"
 say "----------------------------------------"
 ensure_node
 
-# 不带命令时默认 install（只给了 --port 8080 之类的参数也一样）
+# 不带命令时默认进菜单（终端里直接运行）或 install（curl | bash、带参数、CI）
 HAS_CMD=0
 for a in ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}; do
   case "$a" in
-    install | update | uninstall | start | stop | restart | status | logs | passwd | help)
+    menu | install | update | repair | uninstall | start | stop | restart | status | logs | passwd | help)
       HAS_CMD=1
       break
       ;;
   esac
 done
 if [ "$HAS_CMD" = 0 ]; then
-  PASS_ARGS=("install" ${PASS_ARGS[@]+"${PASS_ARGS[@]}"})
+  if [ "$BARE_MENU" = 1 ]; then
+    PASS_ARGS=("menu" ${PASS_ARGS[@]+"${PASS_ARGS[@]}"})
+    WANTS_MENU=1
+  else
+    PASS_ARGS=("install" ${PASS_ARGS[@]+"${PASS_ARGS[@]}"})
+  fi
 fi
 
-# 老版本安装自带的 setup.js 可能还不支持「压缩包更新」之类的逻辑，
-# 更新前先把它换成远端最新的一份，避免「自己更不动自己」。
+# 老版本安装自带的 setup.js 可能还不支持「压缩包更新」「管理菜单」之类的逻辑，
+# 需要时先把它换成远端最新的一份，避免「自己更不动自己」。
 refresh_setup_js() {
-  local slug raw tmp
-  [ "$WANTS_UPDATE" = 1 ] || return 0
+  local slug raw tmp need=0
+  [ -f "$ROOT/scripts/setup.js" ] || return 0
+  # 更新时两种安装方式都要刷新脚本；进菜单时只在脚本还不认 menu 命令时刷新
+  if [ "$WANTS_UPDATE" = 1 ]; then
+    need=1
+  elif [ "$WANTS_MENU" = 1 ] && ! grep -q "function cmdMenu" "$ROOT/scripts/setup.js" 2>/dev/null; then
+    need=1
+  fi
+  [ "$need" = 1 ] || return 0
   # git 安装能靠 pull 自更新，不需要替换（替换反而会让 pull 报本地改动冲突）
   [ -d "$ROOT/.git" ] && return 0
-  [ -f "$ROOT/scripts/setup.js" ] || return 0
   can_download || return 0
   slug="${REPO_URL#https://github.com/}"
   slug="${slug%.git}"
@@ -526,4 +550,18 @@ refresh_setup_js() {
 
 say "安装目录：$ROOT"
 refresh_setup_js
+
+# 极老的安装（且刷新脚本失败）时，别把用户卡在「未知命令」上，退回默认安装流程
+if [ "$WANTS_MENU" = 1 ] && ! grep -q "function cmdMenu" "$ROOT/scripts/setup.js" 2>/dev/null; then
+  say ""
+  say "当前这份安装脚本还不支持菜单，先升级一次就能用：./install.sh update"
+  say "本次按默认流程继续安装 / 启动。"
+  _rest=()
+  for a in ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}; do
+    [ "$a" = "menu" ] && continue
+    _rest+=("$a")
+  done
+  PASS_ARGS=("install" ${_rest[@]+"${_rest[@]}"})
+fi
+
 exec "$NODE_BIN" "$ROOT/scripts/setup.js" ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}
