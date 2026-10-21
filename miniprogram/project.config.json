@@ -1,0 +1,34 @@
+{
+  "description": "CodeCamp 少儿编程学堂 · 微信小程序",
+  "projectname": "codecamp-miniprogram",
+  "appid": "touristappid",
+  "compileType": "miniprogram",
+  "libVersion": "3.5.5",
+  "miniprogramRoot": "./",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "showShadowRootInWxmlPanel": true,
+    "packNpmManually": false,
+    "coverView": true,
+    "lazyloadPlaceholderEnable": false,
+    "skylineRenderEnable": false,
+    "preloadBackgroundData": false,
+    "autoAudits": false,
+    "useIsolateContext": true,
+    "useCompilerModule": true
+  },
+  "condition": {
+    "miniprogram": {
+      "list": [
+        { "name": "首页", "pathName": "pages/index/index", "query": "", "scene": null },
+        { "name": "作品详情", "pathName": "pages/detail/detail", "query": "id=1", "scene": null }
+      ]
+    }
+  }
+}

@@ -1,0 +1,18 @@
+.topbar {
+  display: flex; align-items: center; gap: 16rpx;
+  padding: 24rpx 28rpx; background: var(--surface);
+  border-bottom: 1rpx solid var(--border);
+}
+.item { margin-bottom: 18rpx; }
+.op { font-size: 24rpx; color: var(--brand-d); }
+.op.danger { color: var(--red); }
+
+.mask { position: fixed; inset: 0; background: rgba(15, 15, 20, 0.42); z-index: 40; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 41;
+  background: var(--surface); border-radius: 28rpx 28rpx 0 0;
+  padding: 32rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+  max-height: 78vh;
+}
+.stu-list { max-height: 56vh; }
+.stu { display: flex; align-items: center; gap: 16rpx; padding: 20rpx 4rpx; border-bottom: 1rpx solid var(--border); }

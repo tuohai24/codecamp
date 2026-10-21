@@ -1,0 +1,9 @@
+.pad { padding: 28rpx; }
+.picker-input { display: flex; align-items: center; justify-content: space-between; line-height: 84rpx; }
+.chip {
+  height: 64rpx; line-height: 64rpx; padding: 0 30rpx; border-radius: 12rpx;
+  font-size: 26rpx; color: var(--text-2); background: var(--surface);
+  border: 1rpx solid var(--border-2);
+}
+.chip.on { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
+.code-area { height: 260rpx; font-family: Menlo, monospace; font-size: 24rpx; }

@@ -1,0 +1,28 @@
+.has-bar { padding-bottom: calc(150rpx + env(safe-area-inset-bottom)); }
+.head { padding: 28rpx; background: var(--surface); border-bottom: 1rpx solid var(--border); }
+.title { font-size: 38rpx; font-weight: 700; line-height: 1.4; margin: 14rpx 0 8rpx; }
+.desc { margin-top: 12rpx; font-size: 26rpx; line-height: 1.75; color: var(--text-2); white-space: pre-wrap; }
+
+.score-row { display: flex; align-items: baseline; gap: 8rpx; margin-top: 16rpx; }
+.score { font-size: 56rpx; font-weight: 700; color: var(--brand-d); }
+.feedback { margin-top: 16rpx; background: var(--surface-2); border-radius: 12rpx; padding: 18rpx; }
+
+.sub { display: flex; align-items: center; gap: 16rpx; padding: 22rpx 20rpx; border-bottom: 1rpx solid var(--border); }
+.sub:last-child { border-bottom: none; }
+.sub-main { min-width: 0; }
+.sub-name { font-size: 26rpx; font-weight: 600; }
+.score-badge {
+  min-width: 60rpx; height: 44rpx; line-height: 44rpx; text-align: center;
+  border-radius: 10rpx; background: var(--brand-soft); color: var(--brand-d);
+  font-size: 24rpx; font-weight: 700;
+}
+
+.mask { position: fixed; inset: 0; background: rgba(15, 15, 20, 0.42); z-index: 40; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 41;
+  background: var(--surface); border-radius: 28rpx 28rpx 0 0;
+  padding: 32rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+  max-height: 78vh;
+}
+.pick-list { max-height: 52vh; }
+.pick { display: flex; align-items: center; padding: 24rpx 8rpx; border-bottom: 1rpx solid var(--border); }

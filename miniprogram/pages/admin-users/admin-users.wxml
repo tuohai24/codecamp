@@ -1,0 +1,114 @@
+<view class="page">
+  <view class="sticky">
+    <view class="search-row">
+      <input
+        class="input grow"
+        placeholder="搜索用户名或昵称"
+        placeholder-class="placeholder"
+        value="{{keyword}}"
+        bindinput="onKeyword"
+        confirm-type="search"
+      />
+      <view class="btn btn-primary btn-sm" wx:if="{{isAdmin}}" bindtap="openCreate">＋ 新增</view>
+    </view>
+    <view class="chips">
+      <view
+        wx:for="{{roles}}"
+        wx:key="key"
+        class="chip {{role === item.key ? 'on' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="pickRole"
+      >{{item.name}}</view>
+    </view>
+  </view>
+
+  <view class="wrap">
+    <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+    <block wx:elif="{{list.length}}">
+      <view class="list">
+        <view class="item" wx:for="{{list}}" wx:key="id">
+          <view class="between">
+            <view class="grow">
+              <view class="row gap-8">
+                <text class="strong">{{item.nickname}}</text>
+                <text class="tag {{item.role === 'admin' ? 'tag-red' : (item.role === 'teacher' ? 'tag-python' : '')}}">{{item.roleText}}</text>
+                <text class="tag tag-red" wx:if="{{!item.status}}">已禁用</text>
+              </view>
+              <view class="tip">@{{item.username}}{{item.class_name ? ' · ' + item.class_name : ''}} · ID {{item.id}}</view>
+            </view>
+            <view class="row gap-12" wx:if="{{isAdmin}}">
+              <text
+                class="op"
+                data-id="{{item.id}}"
+                data-username="{{item.username}}"
+                data-nickname="{{item.nickname}}"
+                data-role="{{item.role}}"
+                data-status="{{item.status}}"
+                data-class-id="{{item.class_id}}"
+                bindtap="openEdit"
+              >编辑</text>
+              <text class="op danger" data-id="{{item.id}}" data-name="{{item.nickname}}" bindtap="remove">删除</text>
+            </view>
+          </view>
+        </view>
+      </view>
+      <view class="tip center mt-16">共 {{list.length}} 个账号（最多显示 300 个）</view>
+    </block>
+
+    <empty wx:else icon="🧑‍🎓" text="没有找到符合条件的账号" />
+  </view>
+
+  <!-- 新增/编辑弹层 -->
+  <view class="mask" wx:if="{{sheet}}" bindtap="closeSheet"></view>
+  <view class="sheet" wx:if="{{sheet}}">
+    <view class="between mb-24">
+      <text class="h3">{{editing ? '编辑账号' : '新增账号'}}</text>
+      <text class="muted" bindtap="closeSheet">关闭</text>
+    </view>
+
+    <view class="field" wx:if="{{!editing}}">
+      <text class="label">用户名</text>
+      <input class="input" value="{{form.username}}" data-k="username" bindinput="onInput" maxlength="20" placeholder="字母、数字或下划线" placeholder-class="placeholder" />
+    </view>
+
+    <view class="field">
+      <text class="label">昵称</text>
+      <input class="input" value="{{form.nickname}}" data-k="nickname" bindinput="onInput" maxlength="20" placeholder="展示名称" placeholder-class="placeholder" />
+    </view>
+
+    <view class="field">
+      <text class="label">{{editing ? '重置密码（留空则不修改）' : '初始密码'}}</text>
+      <input class="input" password value="{{form.password}}" data-k="password" bindinput="onInput" maxlength="64" placeholder="至少 6 位" placeholder-class="placeholder" />
+    </view>
+
+    <view class="field">
+      <text class="label">角色</text>
+      <view class="row gap-12">
+        <view class="chip {{form.role === 'student' ? 'on' : ''}}" data-key="student" bindtap="pickFormRole">学生</view>
+        <view class="chip {{form.role === 'teacher' ? 'on' : ''}}" data-key="teacher" bindtap="pickFormRole">老师</view>
+        <view class="chip {{form.role === 'admin' ? 'on' : ''}}" data-key="admin" bindtap="pickFormRole">管理员</view>
+      </view>
+    </view>
+
+    <view class="field">
+      <text class="label">班级</text>
+      <picker mode="selector" range="{{classOptions}}" range-key="name" value="{{classIndex}}" bindchange="onClassChange">
+        <view class="input picker-input">{{classOptions[classIndex].name}}<text class="list-arrow">›</text></view>
+      </picker>
+    </view>
+
+    <view class="field between" wx:if="{{editing}}">
+      <text class="label" style="margin:0">账号状态</text>
+      <view class="row gap-12" bindtap="toggleStatus">
+        <text class="tag {{form.status ? 'tag-ok' : 'tag-red'}}">{{form.status ? '正常' : '已禁用'}}</text>
+        <text class="tip">点此切换</text>
+      </view>
+    </view>
+
+    <button class="btn btn-primary btn-block" bindtap="save" disabled="{{saving}}">{{saving ? '保存中…' : '保存'}}</button>
+    <view class="safe-bottom"></view>
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>

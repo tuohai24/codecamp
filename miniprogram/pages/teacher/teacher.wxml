@@ -1,0 +1,56 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+  <block wx:else>
+    <view class="hero">
+      <view class="between">
+        <view>
+          <view class="h2">教师工作台</view>
+          <view class="tip">批改、布置作业、管理班级</view>
+        </view>
+        <view class="avg" wx:if="{{o}}">
+          <view class="avg-v">{{avgScore}}</view>
+          <view class="avg-k">平均分</view>
+        </view>
+      </view>
+
+      <view class="stats hero-stats" wx:if="{{o}}">
+        <view class="stat" wx:for="{{cards}}" wx:key="k">
+          <view class="v">{{item.v}}</view>
+          <view class="k">{{item.k}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="wrap">
+      <view class="grid-2 quick">
+        <view class="entry" wx:for="{{entries}}" wx:key="key" data-url="{{item.url}}" data-tab="{{item.tab}}" bindtap="go">
+          <text class="e-icon">{{item.icon}}</text>
+          <text class="e-title">{{item.name}}</text>
+        </view>
+      </view>
+
+      <view class="card-hd mt-32">
+        <text class="h3">最近提交</text>
+        <text class="muted tip">已批改 {{graded}}</text>
+      </view>
+
+      <view class="list" wx:if="{{recent.length}}">
+        <view class="sub" wx:for="{{recent}}" wx:key="id" data-id="{{item.assignment_id}}" bindtap="openAssignment">
+          <view class="grow sub-main">
+            <view class="between">
+              <text class="sub-name">{{item.nickname}}</text>
+              <text class="tag {{item.status === 'graded' ? 'tag-ok' : 'tag-warn'}}">{{item.statusText}}</text>
+            </view>
+            <view class="tip wrap-text">{{item.assignment_title}} · {{item.project_title || '作品已删除'}}</view>
+            <view class="tip">{{item.time}}</view>
+          </view>
+          <view class="score-badge" wx:if="{{item.score !== null && item.score !== undefined}}">{{item.score}}</view>
+        </view>
+      </view>
+      <empty wx:else icon="📝" text="还没有学生提交作业" />
+    </view>
+  </block>
+
+  <view class="safe-bottom"></view>
+</view>

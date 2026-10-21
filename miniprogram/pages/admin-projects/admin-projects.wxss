@@ -1,0 +1,12 @@
+.sticky { position: sticky; top: 0; z-index: 10; background: var(--bg); padding: 20rpx 28rpx 14rpx; border-bottom: 1rpx solid var(--border); }
+.chips { display: flex; gap: 12rpx; margin-top: 16rpx; }
+.chip {
+  height: 56rpx; line-height: 56rpx; padding: 0 24rpx; border-radius: 999rpx;
+  font-size: 24rpx; background: var(--surface); border: 1rpx solid var(--border); color: var(--text-2);
+}
+.chip.on { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
+.item { padding: 24rpx; border-bottom: 1rpx solid var(--border); }
+.item:last-child { border-bottom: none; }
+.ops { display: flex; gap: 28rpx; margin-top: 14rpx; }
+.op { font-size: 24rpx; color: var(--brand-d); }
+.op.danger { color: var(--red); }

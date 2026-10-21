@@ -3,6 +3,10 @@ node_modules/
 .runtime/
 *.log
 
+# 本地环境配置（含密钥，绝不入库；模板见 .env.example）
+.env
+.env.local
+
 # 用户数据：数据库、上传素材、作品 sb3、Python 虚拟环境、备份
 data/
 

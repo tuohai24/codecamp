@@ -1,0 +1,33 @@
+.sticky {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg); padding: 20rpx 28rpx 14rpx;
+  border-bottom: 1rpx solid var(--border);
+}
+.searchbox {
+  position: relative; display: flex; align-items: center;
+  height: 76rpx; background: var(--surface);
+  border: 1rpx solid var(--border-2); border-radius: 14rpx; padding: 0 20rpx;
+}
+.searchbox .icon { font-size: 26rpx; opacity: 0.6; margin-right: 12rpx; }
+.search-input { flex: 1; height: 76rpx; font-size: 26rpx; }
+.clear { color: var(--muted); font-size: 24rpx; padding: 0 4rpx 0 12rpx; }
+
+.chips { display: flex; align-items: center; gap: 12rpx; margin-top: 16rpx; flex-wrap: wrap; }
+.chip {
+  height: 56rpx; line-height: 56rpx; padding: 0 22rpx; border-radius: 999rpx;
+  font-size: 24rpx; color: var(--text-2); background: var(--surface);
+  border: 1rpx solid var(--border);
+}
+.chip.on { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
+.chip-sep { width: 1rpx; height: 28rpx; background: var(--border-2); margin: 0 4rpx; }
+
+.total { margin: 4rpx 0 16rpx; }
+
+.fab {
+  position: fixed; right: 36rpx; bottom: calc(48rpx + env(safe-area-inset-bottom));
+  width: 104rpx; height: 104rpx; border-radius: 50%;
+  background: var(--ink); color: #fff; font-size: 52rpx; line-height: 100rpx;
+  text-align: center; box-shadow: 0 10rpx 28rpx rgba(16, 16, 20, 0.22);
+  z-index: 30;
+}
+.fab:active { background: var(--ink-hover); }

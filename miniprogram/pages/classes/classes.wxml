@@ -1,0 +1,70 @@
+<view class="page">
+  <view class="topbar">
+    <view class="grow">
+      <view class="strong">班级管理</view>
+      <view class="tip">班级码可以发给学生，用于分班</view>
+    </view>
+    <view class="btn btn-primary btn-sm" bindtap="openCreate">＋ 新建班级</view>
+  </view>
+
+  <view class="wrap">
+    <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+    <block wx:elif="{{list.length}}">
+      <view class="card item" wx:for="{{list}}" wx:key="id">
+        <view class="between">
+          <view class="grow" data-id="{{item.id}}" data-name="{{item.name}}" bindtap="viewStudents">
+            <view class="h3">{{item.name}}</view>
+            <view class="tip">
+              班级码 {{item.code}} · {{item.students}} 人{{item.teacher_name ? ' · ' + item.teacher_name : ''}}
+            </view>
+          </view>
+          <view class="row gap-12">
+            <text class="op" data-code="{{item.code}}" bindtap="copyCode">复制码</text>
+            <text class="op danger" data-id="{{item.id}}" data-name="{{item.name}}" bindtap="remove">删除</text>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <empty wx:else icon="👥" text="还没有班级，点右上角新建一个" />
+  </view>
+
+  <!-- 新建班级 -->
+  <view class="mask" wx:if="{{creating}}" bindtap="closeCreate"></view>
+  <view class="sheet" wx:if="{{creating}}">
+    <view class="between mb-24">
+      <text class="h3">新建班级</text>
+      <text class="muted" bindtap="closeCreate">关闭</text>
+    </view>
+    <view class="field">
+      <text class="label">班级名称</text>
+      <input class="input" value="{{name}}" bindinput="onName" maxlength="40" placeholder="例如：五年级 3 班" placeholder-class="placeholder" />
+    </view>
+    <view class="tip mb-16">班级码会自动生成，学生注册后由老师/管理员分配到班级。</view>
+    <button class="btn btn-primary btn-block" bindtap="create" disabled="{{saving}}">{{saving ? '创建中…' : '创建'}}</button>
+    <view class="safe-bottom"></view>
+  </view>
+
+  <!-- 学生名单 -->
+  <view class="mask" wx:if="{{viewing}}" bindtap="closeStudents"></view>
+  <view class="sheet" wx:if="{{viewing}}">
+    <view class="between mb-16">
+      <text class="h3">{{viewing.name}} · 学生名单</text>
+      <text class="muted" bindtap="closeStudents">关闭</text>
+    </view>
+    <scroll-view scroll-y class="stu-list">
+      <view class="stu" wx:for="{{students}}" wx:key="id">
+        <view class="avatar avatar-sm avatar-fallback">{{item.initial}}</view>
+        <view class="grow">
+          <view class="strong">{{item.nickname}}</view>
+          <view class="tip">@{{item.username}}{{item.status ? '' : ' · 已禁用'}}</view>
+        </view>
+      </view>
+      <empty wx:if="{{!students.length}}" icon="🧑‍🎓" text="这个班还没有学生" />
+    </scroll-view>
+    <view class="safe-bottom"></view>
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>

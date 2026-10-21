@@ -1,0 +1,52 @@
+<view class="page pad">
+  <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+  <block wx:else>
+    <view class="card">
+      <view class="field">
+        <text class="label">站点名称</text>
+        <input class="input" value="{{form.site_name}}" data-k="site_name" bindinput="onInput" maxlength="30" placeholder="CodeCamp 少儿编程学堂" placeholder-class="placeholder" />
+      </view>
+      <view class="field">
+        <text class="label">标语</text>
+        <input class="input" value="{{form.site_slogan}}" data-k="site_slogan" bindinput="onInput" maxlength="60" placeholder="让每个孩子都能创造自己的作品" placeholder-class="placeholder" />
+      </view>
+
+      <view class="switch-row">
+        <view class="grow">
+          <view class="strong">开放注册</view>
+          <view class="tip">关闭后学生只能由老师或管理员创建账号</view>
+        </view>
+        <switch checked="{{form.allow_register}}" data-k="allow_register" bindchange="onSwitch" color="#4f46e5" />
+      </view>
+
+      <view class="switch-row">
+        <view class="grow">
+          <view class="strong">允许学生安装第三方库</view>
+          <view class="tip">关闭后只有老师和管理员可以装 pip 包</view>
+        </view>
+        <switch checked="{{form.allow_pip}}" data-k="allow_pip" bindchange="onSwitch" color="#4f46e5" />
+      </view>
+
+      <view class="field mt-24">
+        <text class="label">pip 镜像地址</text>
+        <input class="input" value="{{form.pip_index}}" data-k="pip_index" bindinput="onInput" maxlength="120" placeholder="https://mirrors.aliyun.com/pypi/simple" placeholder-class="placeholder" />
+      </view>
+
+      <button class="btn btn-primary btn-block mt-16" bindtap="save" disabled="{{saving}}">{{saving ? '保存中…' : '保存设置'}}</button>
+    </view>
+
+    <view class="card mt-24">
+      <view class="h3">发布前检查清单</view>
+      <view class="tip mt-12">
+        · 服务器已用 HTTPS 部署，且在小程序后台配置了 request / downloadFile 合法域名{'\n'}
+        · 已填写 AppID / AppSecret（.env 里的 WX_APPID / WX_SECRET），微信登录才能用{'\n'}
+        · 内容安全检测由微信 msgSecCheck 提供，UGC 内容发布时自动校验{'\n'}
+        · 小程序后台已配置《用户隐私保护指引》，勾选昵称、头像、相册用途{'\n'}
+        · 若类目选择「教育」，需要上传对应资质（办学许可或 ICP 备案）
+      </view>
+    </view>
+  </block>
+
+  <view class="safe-bottom"></view>
+</view>

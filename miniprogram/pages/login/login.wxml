@@ -1,0 +1,70 @@
+<view class="page auth">
+  <view class="brand">
+    <view class="logo">CC</view>
+    <view class="h1">{{mode === 'login' ? '欢迎回来' : '创建账号'}}</view>
+    <view class="tip">{{site.name || 'CodeCamp 少儿编程学堂'}}</view>
+  </view>
+
+  <view class="card auth-card">
+    <view class="tabs">
+      <view class="tab {{mode === 'login' ? 'on' : ''}}" data-mode="login" bindtap="switchMode">登录</view>
+      <view class="tab {{mode === 'register' ? 'on' : ''}}" data-mode="register" bindtap="switchMode">注册</view>
+    </view>
+
+    <view class="field">
+      <text class="label">用户名</text>
+      <input
+        class="input"
+        placeholder="字母、数字或下划线"
+        placeholder-class="placeholder"
+        value="{{username}}"
+        data-k="username"
+        bindinput="onInput"
+        maxlength="20"
+        autocomplete="username"
+      />
+    </view>
+
+    <view class="field" wx:if="{{mode === 'register'}}">
+      <text class="label">昵称</text>
+      <input
+        class="input"
+        placeholder="展示在作品和评论里"
+        placeholder-class="placeholder"
+        value="{{nickname}}"
+        data-k="nickname"
+        bindinput="onInput"
+        maxlength="20"
+      />
+    </view>
+
+    <view class="field">
+      <text class="label">密码</text>
+      <input
+        class="input"
+        password
+        placeholder="{{mode === 'register' ? '至少 6 位' : '请输入密码'}}"
+        placeholder-class="placeholder"
+        value="{{password}}"
+        data-k="password"
+        bindinput="onInput"
+        maxlength="64"
+      />
+    </view>
+
+    <view class="err" wx:if="{{errMsg}}">{{errMsg}}</view>
+
+    <button class="btn btn-primary btn-block" bindtap="submit" disabled="{{loading}}">
+      {{loading ? '处理中…' : (mode === 'login' ? '登录' : '注册并登录')}}
+    </button>
+
+    <view class="divider"></view>
+
+    <button class="btn btn-ghost btn-block" bindtap="wechatLogin" disabled="{{loading}}">微信一键登录</button>
+    <view class="tip center mt-16" wx:if="{{needBind}}">该微信尚未绑定账号，请先用已有账号登录</view>
+    <view class="tip center mt-16" wx:elif="{{!wxEnabled}}">服务端未配置小程序登录，可用账号密码登录</view>
+  </view>
+
+  <view class="tip center foot" bindtap="goHome">先逛逛广场 →</view>
+  <view class="safe-bottom"></view>
+</view>

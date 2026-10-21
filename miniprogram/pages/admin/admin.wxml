@@ -1,0 +1,103 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+  <block wx:else>
+    <view class="hero">
+      <view class="h2">管理后台</view>
+      <view class="tip">站点数据、内容与系统状态</view>
+      <view class="grid-2 cards mt-24">
+        <view class="stat-card" wx:for="{{cards}}" wx:key="k">
+          <view class="v">{{item.v}}</view>
+          <view class="k">{{item.k}}</view>
+          <view class="sub">{{item.sub}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="wrap">
+      <view class="grid-2 quick">
+        <view class="entry" data-url="/pages/admin-users/admin-users" bindtap="go">
+          <text class="e-icon">🧑‍🎓</text>
+          <view>
+            <view class="e-title">用户管理</view>
+            <view class="tip">新增 / 改角色 / 重置密码</view>
+          </view>
+        </view>
+        <view class="entry" data-url="/pages/admin-projects/admin-projects" bindtap="go">
+          <text class="e-icon">🎨</text>
+          <view>
+            <view class="e-title">作品管理</view>
+            <view class="tip">下线违规作品</view>
+          </view>
+        </view>
+        <view class="entry" data-url="/pages/admin-assets/admin-assets" bindtap="go">
+          <text class="e-icon">🖼️</text>
+          <view>
+            <view class="e-title">素材库</view>
+            <view class="tip">角色 / 背景 / 声音</view>
+          </view>
+        </view>
+        <view class="entry" data-url="/pages/admin-settings/admin-settings" bindtap="go">
+          <text class="e-icon">⚙️</text>
+          <view>
+            <view class="e-title">站点设置</view>
+            <view class="tip">名称 / 注册开关</view>
+          </view>
+        </view>
+        <view class="entry" data-url="/pages/classes/classes" bindtap="go">
+          <text class="e-icon">👥</text>
+          <view>
+            <view class="e-title">班级管理</view>
+            <view class="tip">建班 / 学生名单</view>
+          </view>
+        </view>
+        <view class="entry" data-url="/pages/teacher/teacher" bindtap="go">
+          <text class="e-icon">🧑‍🏫</text>
+          <view>
+            <view class="e-title">教师视图</view>
+            <view class="tip">批改与作业</view>
+          </view>
+        </view>
+      </view>
+
+      <view class="card mt-24" wx:if="{{sys}}">
+        <view class="h3">系统状态</view>
+        <view class="kv mt-12"><text class="muted">版本</text><text>v{{sys.version}}</text></view>
+        <view class="kv"><text class="muted">Node / 平台</text><text>{{sys.node}} · {{sys.platform}}</text></view>
+        <view class="kv"><text class="muted">已运行</text><text>{{sys.uptime}}</text></view>
+        <view class="kv"><text class="muted">内存占用</text><text>{{sys.rss}}（堆 {{sys.heap}}）</text></view>
+        <view class="kv"><text class="muted">数据库</text><text>{{sys.db}}（WAL {{sys.wal}}）</text></view>
+        <view class="kv"><text class="muted">作品包 / 上传</text><text>{{sys.sb3}} / {{sys.uploads}}</text></view>
+        <view class="kv"><text class="muted">班级 / 评论</text><text>{{sys.classes}} / {{sys.comments}}</text></view>
+      </view>
+
+      <view class="card-hd mt-32">
+        <text class="h3">最近注册</text>
+      </view>
+      <view class="list">
+        <view class="list-item" wx:for="{{recentUsers}}" wx:key="id">
+          <view>
+            <view class="strong">{{item.nickname}}</view>
+            <view class="tip">@{{item.username}}</view>
+          </view>
+          <text class="tag">{{item.role}}</text>
+        </view>
+      </view>
+
+      <view class="card-hd mt-32">
+        <text class="h3">浏览最多</text>
+      </view>
+      <view class="list">
+        <view class="list-item" wx:for="{{topProjects}}" wx:key="id" data-id="{{item.id}}" bindtap="openProject">
+          <view class="grow">
+            <view class="strong wrap-text">{{item.title}}</view>
+            <view class="tip">{{item.type}} · {{item.views}} 次浏览{{item.published ? '' : ' · 未发布'}}</view>
+          </view>
+          <text class="list-arrow">›</text>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view class="safe-bottom"></view>
+</view>

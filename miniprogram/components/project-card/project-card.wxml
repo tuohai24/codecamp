@@ -1,0 +1,17 @@
+<view class="p-card" bindtap="tap" hover-class="p-card-hover">
+  <view class="p-thumb">
+    <image wx:if="{{view.thumb}}" class="thumb-img" src="{{view.thumb}}" mode="aspectFill" lazy-load />
+    <view wx:else class="ph">{{view.type === 'python' ? 'PY' : 'SB3'}}</view>
+    <view class="badge {{view.type === 'python' ? 'badge-py' : 'badge-sb'}}">{{view.typeName}}</view>
+  </view>
+  <view class="p-body">
+    <view class="p-title ellipsis-2">{{item.title || '未命名作品'}}</view>
+    <view class="p-meta">
+      <text wx:if="{{showAuthor}}" class="author">{{item.nickname || '匿名'}}</text>
+      <text wx:if="{{showAuthor}}">·</text>
+      <text>♥ {{view.likes}}</text>
+      <text>·</text>
+      <text>{{view.time}}</text>
+    </view>
+  </view>
+</view>

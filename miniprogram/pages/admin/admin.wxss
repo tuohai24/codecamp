@@ -1,0 +1,18 @@
+.hero { background: var(--surface); padding: 32rpx 28rpx 28rpx; border-bottom: 1rpx solid var(--border); }
+.cards { margin-top: 24rpx; }
+.stat-card { background: var(--surface-2); border-radius: var(--radius); padding: 22rpx; }
+.stat-card .v { font-size: 44rpx; font-weight: 700; letter-spacing: -1rpx; }
+.stat-card .k { font-size: 24rpx; color: var(--text-2); margin-top: 2rpx; }
+.stat-card .sub { font-size: 20rpx; color: var(--muted); margin-top: 6rpx; }
+
+.quick { margin-top: 4rpx; }
+.entry {
+  display: flex; align-items: center; gap: 16rpx;
+  background: var(--surface); border: 1rpx solid var(--border);
+  border-radius: var(--radius); padding: 24rpx;
+}
+.entry:active { background: var(--surface-2); }
+.e-icon { font-size: 34rpx; }
+.e-title { font-size: 26rpx; font-weight: 600; }
+
+.kv { display: flex; align-items: center; justify-content: space-between; padding: 12rpx 0; font-size: 25rpx; }

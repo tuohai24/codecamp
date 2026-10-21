@@ -1,4 +1,6 @@
 'use strict';
+// 先加载 .env，后面模块读取 process.env 时才拿得到 WX_APPID 等配置
+require('./src/env').loadEnv();
 const http = require('node:http');
 const path = require('node:path');
 const { createRouter, sendJson, readBody, readBuffer, serveStatic, HttpError } = require('./src/http-util');

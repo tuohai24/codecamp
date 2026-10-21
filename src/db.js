@@ -191,6 +191,17 @@ CREATE TABLE IF NOT EXISTS shares (
   db.exec("UPDATE assets SET kind='sprite' WHERE kind='costume'");
 })();
 
+// 小程序：微信账号绑定。openid 用部分唯一索引，未绑定的空串不参与约束
+(function upgradeUsers() {
+  const cols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+  const add = (name, ddl) => {
+    if (!cols.includes(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${ddl}`);
+  };
+  add('openid', "TEXT DEFAULT ''");
+  add('unionid', "TEXT DEFAULT ''");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_openid ON users(openid) WHERE openid <> ''");
+})();
+
 // 索引必须放在迁移之后建：老库缺列时 CREATE INDEX 会直接报错，导致启动失败
 db.exec(`
 -- 索引：覆盖列表、详情、计数、鉴权四条主查询路径

@@ -1,0 +1,71 @@
+<view class="page pad">
+  <view class="card brand">
+    <view class="logo">CC</view>
+    <view class="h2">{{siteName || 'CodeCamp 少儿编程学堂'}}</view>
+    <view class="tip">小程序 v{{appVersion}} · 服务端 v{{server}}</view>
+  </view>
+
+  <view class="list mt-24">
+    <view class="list-item" bindtap="openEdit">
+      <text>服务器地址</text>
+      <view class="row gap-8">
+        <text class="muted wrap-text server">{{base}}</text>
+        <text class="list-arrow">›</text>
+      </view>
+    </view>
+    <view class="list-item">
+      <text>允许注册</text>
+      <text class="muted">{{allowRegister ? '已开放' : '仅老师创建账号'}}</text>
+    </view>
+    <view class="list-item">
+      <text>微信绑定</text>
+      <text class="muted">{{wxBound ? '已绑定当前微信' : '未绑定'}}</text>
+    </view>
+  </view>
+
+  <view class="card mt-24">
+    <view class="h3">隐私与内容规范</view>
+    <view class="tip mt-12">
+      · 小程序仅收集完成学习所需的信息：账号、昵称、头像、你创作的作品与作业提交记录。{'\n'}
+      · 头像与你上传的图片仅用于站内展示，不会用于广告或第三方推送。{'\n'}
+      · 作品标题、简介、评论会经过内容安全检测，违规内容会被拒绝发布。{'\n'}
+      · 如需删除账号或数据，请联系班级老师或站点管理员。
+    </view>
+  </view>
+
+  <view class="list mt-24">
+    <view class="list-item" bindtap="copyBase">
+      <text>复制服务器地址</text>
+      <text class="list-arrow">›</text>
+    </view>
+    <view class="list-item" bindtap="clearCache">
+      <text class="danger">清除本地数据并退出登录</text>
+      <text class="list-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="tip center mt-32">CodeCamp · Scratch + Python 少儿编程学堂</view>
+  <view class="safe-bottom"></view>
+
+  <!-- 修改服务器地址 -->
+  <view class="mask" wx:if="{{editing}}" bindtap="closeEdit"></view>
+  <view class="sheet" wx:if="{{editing}}">
+    <view class="between mb-24">
+      <text class="h3">服务器地址</text>
+      <text class="muted" bindtap="closeEdit">关闭</text>
+    </view>
+    <view class="field">
+      <text class="label">接口地址（含 http:// 或 https://）</text>
+      <input
+        class="input"
+        value="{{baseInput}}"
+        bindinput="onBaseInput"
+        placeholder="https://codecamp.example.com"
+        placeholder-class="placeholder"
+      />
+    </view>
+    <view class="tip mb-16">保存后立即生效；清空即恢复配置文件里的默认地址。真机调试必须是已备案的 HTTPS 域名。</view>
+    <button class="btn btn-primary btn-block" bindtap="saveBase">保存并重连</button>
+    <view class="safe-bottom"></view>
+  </view>
+</view>

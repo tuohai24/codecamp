@@ -1,0 +1,26 @@
+.hero { background: var(--surface); padding: 32rpx 28rpx 24rpx; border-bottom: 1rpx solid var(--border); }
+.avg { text-align: center; }
+.avg-v { font-size: 52rpx; font-weight: 700; color: var(--brand-d); line-height: 1.1; }
+.avg-k { font-size: 22rpx; color: var(--muted); }
+.hero-stats { margin-top: 24rpx; padding-top: 22rpx; border-top: 1rpx solid var(--border); }
+.hero-stats .v { font-size: 38rpx; }
+
+.quick { margin-top: 4rpx; }
+.entry {
+  display: flex; align-items: center; gap: 14rpx;
+  background: var(--surface); border: 1rpx solid var(--border);
+  border-radius: var(--radius); padding: 26rpx 24rpx;
+}
+.entry:active { background: var(--surface-2); }
+.e-icon { font-size: 34rpx; }
+.e-title { font-size: 26rpx; font-weight: 600; color: var(--text-2); }
+
+.sub { display: flex; align-items: center; gap: 16rpx; padding: 24rpx; border-bottom: 1rpx solid var(--border); }
+.sub:last-child { border-bottom: none; }
+.sub-main { min-width: 0; }
+.sub-name { font-size: 26rpx; font-weight: 600; }
+.score-badge {
+  min-width: 64rpx; height: 48rpx; line-height: 48rpx; text-align: center;
+  border-radius: 10rpx; background: var(--brand-soft); color: var(--brand-d);
+  font-size: 24rpx; font-weight: 700;
+}

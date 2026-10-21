@@ -1,0 +1,26 @@
+.auth { padding: 60rpx 40rpx; }
+
+.brand { text-align: center; margin-bottom: 48rpx; }
+.logo {
+  width: 112rpx; height: 112rpx; border-radius: 28rpx; margin: 0 auto 28rpx;
+  background: var(--ink); color: #fff; font-weight: 700; font-size: 44rpx;
+  display: flex; align-items: center; justify-content: center; letter-spacing: 1rpx;
+}
+.brand .h1 { font-size: 44rpx; }
+.brand .tip { margin-top: 10rpx; }
+
+.auth-card { padding: 32rpx 32rpx 36rpx; }
+
+.tabs { display: flex; background: var(--surface-2); border-radius: 14rpx; padding: 6rpx; margin-bottom: 32rpx; }
+.tab {
+  flex: 1; text-align: center; height: 64rpx; line-height: 64rpx;
+  font-size: 26rpx; color: var(--muted); border-radius: 10rpx;
+}
+.tab.on { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1rpx 4rpx rgba(16, 16, 20, 0.08); }
+
+.err {
+  background: #fef2f2; color: #dc2626; font-size: 24rpx;
+  padding: 16rpx 20rpx; border-radius: 10rpx; margin-bottom: 20rpx; line-height: 1.6;
+}
+
+.foot { margin-top: 40rpx; color: var(--muted); font-size: 26rpx; }

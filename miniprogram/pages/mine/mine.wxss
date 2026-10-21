@@ -1,0 +1,33 @@
+.profile {
+  display: flex; align-items: center; gap: 24rpx;
+  padding: 36rpx 28rpx 28rpx; background: var(--surface);
+  border-bottom: 1rpx solid var(--border);
+}
+.avatar-btn {
+  padding: 0; margin: 0; background: transparent; line-height: 1;
+  width: 128rpx; height: 128rpx; border-radius: 50%; overflow: hidden;
+}
+.avatar-btn::after { border: none; }
+.name-box { min-width: 0; }
+.bio { margin-top: 6rpx; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.edit-btn {
+  padding: 10rpx 22rpx; border: 1rpx solid var(--border-2); border-radius: 999rpx;
+  font-size: 24rpx; color: var(--text-2); flex-shrink: 0;
+}
+
+.stats-card { margin: 24rpx 28rpx 0; padding: 28rpx 0; }
+.stats-card .v { font-size: 40rpx; }
+
+.m-icon { width: 40rpx; text-align: center; font-size: 30rpx; }
+
+.guest { padding: 120rpx 48rpx; text-align: center; }
+.guest-avatar { margin: 0 auto; font-size: 48rpx; background: var(--surface-2); color: var(--muted); }
+
+.mask {
+  position: fixed; inset: 0; background: rgba(15, 15, 20, 0.42); z-index: 40;
+}
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 41;
+  background: var(--surface); border-radius: 28rpx 28rpx 0 0;
+  padding: 32rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+}

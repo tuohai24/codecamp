@@ -244,6 +244,22 @@ sudo systemctl daemon-reload && sudo systemctl enable --now codecamp
 
 ---
 
+## 微信小程序端
+
+仓库里同时带了一份**原生微信小程序**客户端（`miniprogram/`），与 Web 端共用同一个后端，覆盖学生端、教师端和管理端：
+
+- **学生**：作品广场、搜索排序、详情点赞评论分享、Python 在线编辑与运行、我的作品、作业列表与提交
+- **教师**：工作台、发布作业、查看提交与评分、班级管理
+- **管理员**：数据总览、系统状态、用户管理、作品下线、素材库、站点设置
+- **Scratch 创作**：引擎依赖 DOM，通过 `web-view` 打开官方编辑器（需配置业务域名）
+
+后端为此新增微信登录（`code2session`）与内容安全检测（`msgSecCheck`，UGC 发布前自动校验）。
+配置 `.env` 里的 `WX_APPID / WX_SECRET` 后即可使用微信一键登录；不配置也不影响 Web 端。
+
+导入与发布步骤见 **[miniprogram/README.md](miniprogram/README.md)**（含域名白名单、类目、隐私指引、审核清单）。
+
+---
+
 ## 功能清单
 
 ### 创作
@@ -441,6 +457,9 @@ src/cache.js               进程内缓存（用户/站点/素材库）+ 浏览�
 src/auth.js                口令哈希 / Token 签发校验
 src/python-runner.js       venv 管理、代码执行、pip 安装、产物收集
 src/seed-assets.js         内置角色 / 背景 SVG 写入素材库
+src/wx.js                  微信小程序服务端能力：code2session、access_token 缓存、msgSecCheck
+src/env.js                 .env 加载器（零依赖）
+miniprogram/               微信小程序客户端（原生，用开发者工具打开这个目录）
 runners/pyshim/turtle.py   教学用 turtle → SVG 兼容层
 public/                    前端（index.html 为 SPA 外壳）
   studio/scratch.html      创作页外壳（顶栏 + 官方编辑器 iframe）

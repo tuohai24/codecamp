@@ -1,0 +1,46 @@
+<view class="page">
+  <view class="topbar" wx:if="{{isTeacher}}">
+    <view class="grow">
+      <view class="strong">我布置的作业</view>
+      <view class="tip">点开可以查看提交与批改</view>
+    </view>
+    <view class="btn btn-primary btn-sm" bindtap="create">＋ 布置作业</view>
+  </view>
+
+  <view class="wrap">
+    <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+    <block wx:elif="{{!logged}}">
+      <empty icon="🔒" text="登录后可以查看作业" />
+      <button class="btn btn-primary btn-block" bindtap="goLogin">去登录</button>
+    </block>
+
+    <block wx:elif="{{list.length}}">
+      <view class="card item" wx:for="{{list}}" wx:key="id" data-id="{{item.id}}" bindtap="open">
+        <view class="between">
+          <view class="row gap-8">
+            <text class="tag {{item.typeText === 'Python' ? 'tag-python' : 'tag-scratch'}}">{{item.typeText}}</text>
+            <text class="tag" wx:if="{{!isTeacher && item.submitted}}">{{item.status}}</text>
+            <text class="tag tag-warn" wx:if="{{item.due}}">截止 {{item.due}}</text>
+          </view>
+          <text class="list-arrow">›</text>
+        </view>
+
+        <view class="h3 title">{{item.title}}</view>
+
+        <view class="tip" wx:if="{{!isTeacher}}">
+          {{item.teacher}}{{item.workTitle ? ' · 草稿：' + item.workTitle : ''}}{{item.workTime ? ' · 更新于 ' + item.workTime : ''}}
+        </view>
+
+        <block wx:else>
+          <view class="tip">{{item.className}} · 已交 {{item.submitted}}/{{item.total}} · 已批改 {{item.graded}}</view>
+          <view class="progress"><view class="progress-bar" style="width: {{item.percent}}%"></view></view>
+        </block>
+      </view>
+    </block>
+
+    <empty wx:else icon="📚" text="{{isTeacher ? '还没有布置作业，点右上角新建' : '暂时没有作业'}}" />
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>

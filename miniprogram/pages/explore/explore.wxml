@@ -1,0 +1,54 @@
+<view class="page">
+  <view class="sticky">
+    <view class="search-row">
+      <view class="searchbox">
+        <text class="icon">🔍</text>
+        <input
+          class="search-input"
+          placeholder="搜索作品标题或简介"
+          placeholder-class="placeholder"
+          value="{{keyword}}"
+          bindinput="onKeyword"
+          confirm-type="search"
+        />
+        <text wx:if="{{keyword}}" class="clear" bindtap="clearKeyword">✕</text>
+      </view>
+    </view>
+
+    <view class="chips">
+      <view
+        wx:for="{{types}}"
+        wx:key="key"
+        class="chip {{type === item.key ? 'on' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="pickType"
+      >{{item.name}}</view>
+      <view class="chip-sep"></view>
+      <view
+        wx:for="{{sorts}}"
+        wx:key="key"
+        class="chip {{sort === item.key ? 'on' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="pickSort"
+      >{{item.name}}</view>
+    </view>
+  </view>
+
+  <view class="wrap">
+    <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+    <block wx:elif="{{items.length}}">
+      <view class="total tip">共 {{total}} 个作品</view>
+      <view class="grid-2">
+        <project-card wx:for="{{items}}" wx:key="id" item="{{item}}" />
+      </view>
+      <view class="loading" wx:if="{{loadingMore}}">加载更多…</view>
+      <view class="loading" wx:elif="{{noMore}}">没有更多了</view>
+    </block>
+
+    <empty wx:else icon="🔍" text="{{keyword ? '没有找到匹配的作品' : '广场还是空的，去创作第一个作品吧'}}" />
+  </view>
+
+  <view class="fab" bindtap="goCreate">＋</view>
+  <view class="safe-bottom"></view>
+</view>

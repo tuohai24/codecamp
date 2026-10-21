@@ -1,0 +1,75 @@
+<view class="page pad">
+  <view class="card">
+    <view class="field" wx:if="{{!editing}}">
+      <text class="label">布置到哪个班级</text>
+      <picker mode="selector" range="{{classes}}" range-key="name" value="{{classIndex}}" bindchange="onClassChange">
+        <view class="input picker-input">
+          {{classIndex >= 0 && classes[classIndex] ? classes[classIndex].name : '请选择班级'}}
+          <text class="list-arrow">›</text>
+        </view>
+      </picker>
+      <view class="tip mt-8" wx:if="{{!classes.length}}">
+        还没有班级，先到「班级管理」里新建一个（管理端也可以分配老师）。
+      </view>
+    </view>
+
+    <view class="field">
+      <text class="label">作业标题</text>
+      <input class="input" value="{{form.title}}" data-k="title" bindinput="onInput" maxlength="60" placeholder="例如：用循环画一个正方形" placeholder-class="placeholder" />
+    </view>
+
+    <view class="field">
+      <text class="label">类型</text>
+      <view class="row gap-12">
+        <view
+          wx:for="{{types}}"
+          wx:key="key"
+          class="chip {{form.type === item.key ? 'on' : ''}}"
+          data-key="{{item.key}}"
+          bindtap="pickType"
+        >{{item.name}}</view>
+      </view>
+    </view>
+
+    <view class="field">
+      <text class="label">截止日期（可空）</text>
+      <view class="row gap-12">
+        <picker mode="date" value="{{form.dueAt || today}}" start="{{today}}" bindchange="onDueChange">
+          <view class="input picker-input grow">{{form.dueAt || '不限时间'}}</view>
+        </picker>
+        <view class="btn btn-ghost btn-sm" wx:if="{{form.dueAt}}" bindtap="clearDue">清除</view>
+      </view>
+    </view>
+
+    <view class="field">
+      <text class="label">作业要求</text>
+      <textarea
+        class="textarea"
+        value="{{form.description}}"
+        data-k="description"
+        bindinput="onInput"
+        maxlength="20000"
+        placeholder="描述要求、评分标准、参考效果…"
+        placeholder-class="placeholder"
+      />
+    </view>
+
+    <view class="field" wx:if="{{form.type === 'python'}}">
+      <text class="label">起始代码（学生打开就有的模板）</text>
+      <textarea
+        class="textarea code-area"
+        value="{{form.starter}}"
+        data-k="starter"
+        bindinput="onInput"
+        maxlength="20000"
+        placeholder="print('Hello, CodeCamp!')"
+        placeholder-class="placeholder"
+      />
+    </view>
+
+    <button class="btn btn-primary btn-block mt-16" bindtap="save" disabled="{{saving}}">
+      {{saving ? '保存中…' : (editing ? '保存修改' : '发布作业')}}
+    </button>
+  </view>
+  <view class="safe-bottom"></view>
+</view>

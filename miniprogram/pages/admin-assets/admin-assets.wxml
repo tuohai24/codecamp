@@ -1,0 +1,68 @@
+<view class="page">
+  <view class="sticky">
+    <view class="row gap-16">
+      <input class="input grow" placeholder="搜索素材名称或标签" placeholder-class="placeholder" value="{{keyword}}" bindinput="onKeyword" />
+      <view class="btn btn-primary btn-sm" bindtap="openUpload">＋ 上传</view>
+    </view>
+    <view class="chips">
+      <view
+        wx:for="{{kinds}}"
+        wx:key="key"
+        class="chip {{kind === item.key ? 'on' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="pickKind"
+      >{{item.name}}</view>
+    </view>
+  </view>
+
+  <view class="wrap">
+    <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+    <block wx:elif="{{list.length}}">
+      <view class="grid-3 assets">
+        <view class="asset" wx:for="{{list}}" wx:key="id">
+          <view class="a-thumb">
+            <image wx:if="{{item.thumb}}" class="a-img" src="{{item.thumb}}" mode="aspectFit" lazy-load />
+            <text wx:else class="a-audio">🎵</text>
+          </view>
+          <view class="a-name wrap-text">{{item.name}}</view>
+          <view class="a-meta">{{item.dim || item.format}}{{item.sizeText ? ' · ' + item.sizeText : ''}}</view>
+          <view class="a-ops">
+            <text class="op" data-id="{{item.id}}" data-name="{{item.name}}" data-tags="{{item.tags}}" bindtap="rename">改名</text>
+            <text class="op danger" data-id="{{item.id}}" data-name="{{item.name}}" bindtap="remove">删除</text>
+          </view>
+        </view>
+      </view>
+      <view class="tip center mt-16">共 {{list.length}} 个素材</view>
+    </block>
+
+    <empty wx:else icon="🖼️" text="没有素材，点右上角上传一个" />
+  </view>
+
+  <!-- 上传确认 -->
+  <view class="mask" wx:if="{{sheet}}" bindtap="closeSheet"></view>
+  <view class="sheet" wx:if="{{sheet}}">
+    <view class="between mb-16">
+      <text class="h3">添加素材</text>
+      <text class="muted" bindtap="closeSheet">关闭</text>
+    </view>
+    <view class="preview">
+      <image src="{{pending.dataUrl}}" mode="aspectFit" class="preview-img" />
+    </view>
+    <view class="field">
+      <text class="label">素材名称</text>
+      <input class="input" value="{{assetName}}" bindinput="onAssetName" maxlength="30" placeholder="例如：小猫走路" placeholder-class="placeholder" />
+    </view>
+    <view class="field">
+      <text class="label">类型</text>
+      <view class="row gap-12">
+        <view class="chip {{assetKind === 'sprite' ? 'on' : ''}}" data-key="sprite" bindtap="pickAssetKind">角色</view>
+        <view class="chip {{assetKind === 'backdrop' ? 'on' : ''}}" data-key="backdrop" bindtap="pickAssetKind">背景</view>
+      </view>
+    </view>
+    <button class="btn btn-primary btn-block" bindtap="upload" disabled="{{uploading}}">{{uploading ? '上传中…' : '上传'}}</button>
+    <view class="safe-bottom"></view>
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>

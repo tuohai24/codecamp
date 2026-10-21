@@ -1,0 +1,70 @@
+<view class="page">
+  <!-- 顶部：站点信息 -->
+  <view class="hero">
+    <view class="between">
+      <view class="brand-row">
+        <view class="logo">CC</view>
+        <view>
+          <view class="h2">{{site.name || 'CodeCamp 少儿编程学堂'}}</view>
+          <view class="tip">{{site.slogan || '让每个孩子都能创造自己的作品'}}</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="stats hero-stats">
+      <view class="stat">
+        <view class="v">{{stats.works}}</view>
+        <view class="k">作品</view>
+      </view>
+      <view class="stat">
+        <view class="v">{{stats.students}}</view>
+        <view class="k">学生</view>
+      </view>
+      <view class="stat">
+        <view class="v">{{stats.teachers}}</view>
+        <view class="k">老师</view>
+      </view>
+      <view class="stat">
+        <view class="v">{{site.version || '-'}}</view>
+        <view class="k">版本</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 未登录提示 -->
+  <view class="login-bar" wx:if="{{!user}}" bindtap="goLogin">
+    <view class="grow">
+      <view class="strong">登录后可以创作和提交作业</view>
+      <view class="tip">使用老师发的账号登录，或注册新账号</view>
+    </view>
+    <view class="btn btn-primary btn-sm">去登录</view>
+  </view>
+
+  <!-- 快捷入口 -->
+  <view class="wrap">
+    <view class="grid-3 entries">
+      <view class="entry" wx:for="{{entries}}" wx:key="key" data-url="{{item.url}}" data-tab="{{item.tab}}" bindtap="go">
+        <view class="e-icon">{{item.icon}}</view>
+        <view class="e-title">{{item.title}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 最新作品 -->
+  <view class="wrap">
+    <view class="card-hd">
+      <view class="h3">最新作品</view>
+      <view class="more" bindtap="goExplore">全部 ›</view>
+    </view>
+
+    <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+    <view wx:elif="{{works.length}}" class="grid-2">
+      <project-card wx:for="{{works}}" wx:key="id" item="{{item}}" />
+    </view>
+
+    <empty wx:else icon="🎨" text="还没有公开的作品，去广场看看或自己创作一个" />
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>

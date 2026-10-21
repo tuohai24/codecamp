@@ -1,0 +1,16 @@
+.pad { padding: 32rpx 28rpx; }
+.brand { text-align: center; padding: 40rpx 28rpx; }
+.logo {
+  width: 104rpx; height: 104rpx; border-radius: 26rpx; margin: 0 auto 20rpx;
+  background: var(--ink); color: #fff; font-weight: 700; font-size: 38rpx;
+  display: flex; align-items: center; justify-content: center;
+}
+.server { max-width: 380rpx; font-size: 22rpx; }
+.danger { color: var(--red); }
+
+.mask { position: fixed; inset: 0; background: rgba(15, 15, 20, 0.42); z-index: 40; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 41;
+  background: var(--surface); border-radius: 28rpx 28rpx 0 0;
+  padding: 32rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+}

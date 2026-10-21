@@ -1,0 +1,124 @@
+<view class="page has-bar">
+  <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+  <empty wx:elif="{{!p}}" icon="😿" text="作品不存在，或还没有公开" />
+
+  <block wx:else>
+    <view class="cover">
+      <image wx:if="{{cover}}" class="cover-img" src="{{cover}}" mode="aspectFill" />
+      <view wx:else class="cover-ph">{{typeText}}</view>
+    </view>
+
+    <view class="head">
+      <view class="row gap-8">
+        <text class="tag {{p.type === 'python' ? 'tag-python' : 'tag-scratch'}}">{{typeText}}</text>
+        <text class="tag tag-warn" wx:if="{{!p.published}}">未发布</text>
+      </view>
+      <view class="title">{{p.title}}</view>
+      <view class="author" bindtap="goAuthor">
+        <image wx:if="{{authorAvatar}}" class="avatar avatar-sm" src="{{authorAvatar}}" mode="aspectFill" />
+        <view wx:else class="avatar avatar-sm avatar-fallback">{{authorInitial}}</view>
+        <text class="muted">{{p.nickname}}</text>
+        <text class="muted">· {{time}}</text>
+        <text class="muted">· {{p.views}} 次浏览</text>
+      </view>
+      <view class="desc" wx:if="{{p.description}}">{{p.description}}</view>
+    </view>
+
+    <!-- Python：代码 + 运行 -->
+    <view class="wrap" wx:if="{{p.type === 'python'}}">
+      <view class="card">
+        <view class="between">
+          <text class="h3">代码</text>
+          <text class="muted link" bindtap="toggleCode">{{codeShown ? '收起' : '展开'}}</text>
+        </view>
+        <scroll-view wx:if="{{codeShown}}" scroll-x class="code-box" enable-flex>
+          <text class="code">{{code || '（这个作品还没有代码）'}}</text>
+        </scroll-view>
+        <button class="btn btn-primary btn-block mt-16" bindtap="runCode" disabled="{{running}}">
+          {{running ? '运行中…' : '▶ 运行代码'}}
+        </button>
+
+        <view class="output" wx:if="{{runResult}}">
+          <view class="out-hd">
+            <text class="{{runResult.ok ? 'out-ok' : 'out-fail'}}">{{runResult.ok ? '运行成功' : '运行出错'}}</text>
+            <text class="muted">{{runResult.ms}} ms</text>
+          </view>
+          <scroll-view scroll-y class="out-body" wx:if="{{runResult.stdout || runResult.stderr}}">
+            <text class="out-text" wx:if="{{runResult.stdout}}">{{runResult.stdout}}</text>
+            <text class="out-err" wx:if="{{runResult.stderr}}">{{runResult.stderr}}</text>
+          </scroll-view>
+          <image wx:for="{{runImages}}" wx:key="index" src="{{item}}" mode="widthFix" class="out-img" />
+        </view>
+      </view>
+    </view>
+
+    <!-- Scratch：web-view 打开 -->
+    <view class="wrap" wx:if="{{p.type === 'scratch'}}">
+      <view class="card">
+        <view class="h3">Scratch 作品</view>
+        <view class="tip mt-8">
+          Scratch 编辑器依赖浏览器环境，点击后在内置浏览器中打开运行和编辑。
+          {{isOwner ? '你可以直接在编辑器里修改并保存。' : '可以运行、查看代码块，也可以改编成自己的作品。'}}
+        </view>
+        <button class="btn btn-primary btn-block mt-16" bindtap="openH5">{{isOwner ? '打开编辑器' : '▶ 打开作品'}}</button>
+      </view>
+    </view>
+
+    <!-- 作者操作 -->
+    <view class="wrap" wx:if="{{isOwner || canManage}}">
+      <view class="card">
+        <view class="h3">作者操作</view>
+        <view class="row gap-12 mt-16">
+          <button class="btn btn-ghost btn-sm grow" bindtap="edit">{{p.type === 'python' ? '编辑代码' : '打开编辑器'}}</button>
+          <button class="btn btn-ghost btn-sm grow" bindtap="togglePublish">{{p.published ? '取消发布' : '发布到广场'}}</button>
+          <button class="btn btn-danger btn-sm grow" bindtap="remove">删除</button>
+        </view>
+      </view>
+    </view>
+
+    <!-- 评论 -->
+    <view class="wrap">
+      <view class="card-hd">
+        <text class="h3">评论 {{comments.length}}</text>
+        <text class="muted tip">友善交流，请勿发布不当内容</text>
+      </view>
+
+      <view class="list" wx:if="{{comments.length}}">
+        <view class="cmt" wx:for="{{comments}}" wx:key="id">
+          <image wx:if="{{item.avatarUrl}}" class="avatar avatar-sm" src="{{item.avatarUrl}}" mode="aspectFill" />
+          <view wx:else class="avatar avatar-sm avatar-fallback">{{item.initial}}</view>
+          <view class="grow cmt-main">
+            <view class="between">
+              <text class="cmt-name">{{item.nickname}}</text>
+              <text class="muted cmt-time">{{item.time}}</text>
+            </view>
+            <view class="cmt-text">{{item.content}}</view>
+            <text class="cmt-del" wx:if="{{item.canDelete}}" data-id="{{item.id}}" bindtap="deleteComment">删除</text>
+          </view>
+        </view>
+      </view>
+
+      <empty wx:else icon="💬" text="还没有评论，说点什么鼓励一下" />
+    </view>
+
+    <view class="footer-bar">
+      <view class="act" bindtap="toggleLike">
+        <text class="act-icon {{liked ? 'liked' : ''}}">{{liked ? '♥' : '♡'}}</text>
+        <text class="act-n">{{likes}}</text>
+      </view>
+      <input
+        class="input grow"
+        placeholder="写评论…"
+        placeholder-class="placeholder"
+        value="{{commentText}}"
+        bindinput="onCommentInput"
+        bindconfirm="sendComment"
+        confirm-type="send"
+        maxlength="300"
+      />
+      <button class="btn btn-primary btn-sm" bindtap="sendComment" disabled="{{sending}}">发送</button>
+    </view>
+    <view class="safe-bottom"></view>
+  </block>
+</view>

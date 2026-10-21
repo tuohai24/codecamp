@@ -1,0 +1,74 @@
+<view class="page">
+  <!-- 已登录 -->
+  <block wx:if="{{user}}">
+    <view class="profile">
+      <button class="avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+        <image wx:if="{{avatar}}" class="avatar avatar-lg" src="{{avatar}}" mode="aspectFill" />
+        <view wx:else class="avatar avatar-lg avatar-fallback">{{initial}}</view>
+      </button>
+      <view class="grow name-box" bindtap="openEdit">
+        <view class="row gap-8">
+          <text class="h2">{{user.nickname}}</text>
+          <text class="tag">{{roleText}}</text>
+        </view>
+        <view class="tip wrap-text">@{{user.username}}{{user.className ? ' · ' + user.className : ''}}</view>
+        <view class="tip bio">{{user.bio || '还没有填写简介，点这里补充'}}</view>
+      </view>
+      <view class="edit-btn" bindtap="openEdit">编辑</view>
+    </view>
+
+    <view class="stats card stats-card">
+      <view class="stat" wx:for="{{stats}}" wx:key="k">
+        <view class="v">{{item.v}}</view>
+        <view class="k">{{item.k}}</view>
+      </view>
+    </view>
+
+    <view class="wrap">
+      <view class="list">
+        <view class="list-item" wx:for="{{menus}}" wx:key="key" data-url="{{item.url}}" data-tab="{{item.tab}}" bindtap="go">
+          <view class="row gap-16">
+            <text class="m-icon">{{item.icon}}</text>
+            <text>{{item.name}}</text>
+          </view>
+          <text class="list-arrow">›</text>
+        </view>
+      </view>
+
+      <button class="btn btn-ghost btn-block mt-32" bindtap="logout">退出登录</button>
+      <view class="tip center mt-16">CodeCamp v{{site.version || '-'}} · 小程序端</view>
+    </view>
+  </block>
+
+  <!-- 未登录 -->
+  <block wx:else>
+    <view class="guest">
+      <view class="avatar avatar-lg avatar-fallback guest-avatar">?</view>
+      <view class="h2 mt-24">还没有登录</view>
+      <view class="tip mt-8">登录后可以创作作品、提交作业、给同学点赞</view>
+      <button class="btn btn-primary btn-block mt-32" bindtap="goLogin">登录 / 注册</button>
+      <view class="tip mt-24" bindtap="goLogin">用老师发的账号登录</view>
+    </view>
+  </block>
+
+  <!-- 编辑资料弹层 -->
+  <view class="mask" wx:if="{{editing}}" bindtap="closeEdit"></view>
+  <view class="sheet" wx:if="{{editing}}">
+    <view class="between mb-24">
+      <text class="h3">编辑资料</text>
+      <text class="muted" bindtap="closeEdit">关闭</text>
+    </view>
+    <view class="field">
+      <text class="label">昵称</text>
+      <input class="input" value="{{form.nickname}}" data-k="nickname" bindinput="onForm" maxlength="20" />
+    </view>
+    <view class="field">
+      <text class="label">简介</text>
+      <textarea class="textarea" value="{{form.bio}}" data-k="bio" bindinput="onForm" maxlength="200" />
+    </view>
+    <button class="btn btn-primary btn-block" bindtap="saveProfile" disabled="{{saving}}">{{saving ? '保存中…' : '保存'}}</button>
+    <view class="safe-bottom"></view>
+  </view>
+
+  <view class="safe-bottom"></view>
+</view>

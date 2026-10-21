@@ -1,0 +1,10 @@
+.topbar {
+  display: flex; align-items: center; gap: 16rpx;
+  padding: 24rpx 28rpx; background: var(--surface);
+  border-bottom: 1rpx solid var(--border);
+}
+.item { margin-bottom: 20rpx; }
+.item:active { background: var(--surface-2); }
+.title { margin: 14rpx 0 10rpx; font-size: 30rpx; line-height: 1.45; }
+.progress { height: 8rpx; background: var(--surface-2); border-radius: 999rpx; margin-top: 16rpx; overflow: hidden; }
+.progress-bar { height: 100%; background: var(--brand); border-radius: 999rpx; }

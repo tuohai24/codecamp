@@ -1,0 +1,25 @@
+.sticky {
+  position: sticky; top: 0; z-index: 10; background: var(--bg);
+  padding: 20rpx 28rpx 14rpx; border-bottom: 1rpx solid var(--border);
+}
+.search-row { display: flex; align-items: center; gap: 16rpx; }
+.chips { display: flex; gap: 12rpx; margin-top: 16rpx; }
+.chip {
+  height: 56rpx; line-height: 56rpx; padding: 0 24rpx; border-radius: 999rpx;
+  font-size: 24rpx; background: var(--surface); border: 1rpx solid var(--border); color: var(--text-2);
+}
+.chip.on { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
+
+.item { padding: 24rpx; border-bottom: 1rpx solid var(--border); }
+.item:last-child { border-bottom: none; }
+.op { font-size: 24rpx; color: var(--brand-d); }
+.op.danger { color: var(--red); }
+
+.mask { position: fixed; inset: 0; background: rgba(15, 15, 20, 0.42); z-index: 40; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 41;
+  background: var(--surface); border-radius: 28rpx 28rpx 0 0;
+  padding: 32rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+  max-height: 86vh; overflow-y: auto;
+}
+.picker-input { display: flex; align-items: center; justify-content: space-between; line-height: 84rpx; }

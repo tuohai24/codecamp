@@ -1,0 +1,6 @@
+.hd {
+  display: flex; gap: 24rpx; align-items: center;
+  padding: 36rpx 28rpx; background: var(--surface);
+  border-bottom: 1rpx solid var(--border);
+}
+.info { min-width: 0; }

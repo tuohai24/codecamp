@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "CodeCamp",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark",
+  "usingComponents": {
+    "project-card": "/components/project-card/project-card",
+    "empty": "/components/empty/empty"
+  }
+}

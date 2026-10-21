@@ -1,0 +1,12 @@
+<web-view wx:if="{{url}}" src="{{url}}"></web-view>
+
+<view wx:else class="page pad">
+  <view class="card">
+    <view class="h3">无法打开这个页面</view>
+    <view class="tip mt-8">
+      为了安全，小程序只允许在内置浏览器里打开本站域名（需在「微信公众平台 → 开发管理 → 业务域名」里配置）。
+      如果你刚部署，请先检查 miniprogram/utils/config.js 里的 H5_BASE。
+    </view>
+    <button class="btn btn-ghost btn-block mt-24" bindtap="copy">复制链接</button>
+  </view>
+</view>

@@ -16,6 +16,7 @@ const {
 } = require('./cache');
 const py = require('./python-runner');
 const mirror = require('./scratch-mirror');
+const WX = require('./wx');
 const {
   readBuffer: readAsset,
   md5: digest,
@@ -48,6 +49,7 @@ const pub = (u) =>
     classId: u.class_id,
     status: u.status,
     createdAt: u.created_at,
+    wxBound: !!u.openid,
   };
 
 const getSetting = (key, def = '') => {
@@ -182,8 +184,7 @@ function buildApi(r) {
     return { token: sign({ uid: user.id, role: user.role }), user: pub(user) };
   });
 
-  r.get('/api/auth/me', 'any', (ctx) => {
-    const u = pub(ctx.user);
+  r.get('/api/auth/me', 'any', (ctx) => {    const u = pub(ctx.user);
     if (u.classId) {
       const c = db.prepare('SELECT id,name,code FROM classes WHERE id = ?').get(u.classId);
       u.className = c ? c.name : '';
@@ -191,8 +192,9 @@ function buildApi(r) {
     return u;
   });
 
-  r.patch('/api/auth/me', 'any', (ctx) => {
+  r.patch('/api/auth/me', 'any', async (ctx) => {
     const { nickname, bio, avatar, password, oldPassword } = ctx.body;
+    await WX.checkTexts([nickname, bio], ctx.user.openid, WX.SCENE.profile);
     if (nickname) db.prepare('UPDATE users SET nickname = ? WHERE id = ?').run(String(nickname).slice(0, 20), ctx.user.id);
     if (bio !== undefined) db.prepare('UPDATE users SET bio = ? WHERE id = ?').run(String(bio).slice(0, 200), ctx.user.id);
     if (avatar !== undefined) {
@@ -206,6 +208,78 @@ function buildApi(r) {
     }
     invalidateUser(ctx.user.id);
     return pub(db.prepare('SELECT * FROM users WHERE id = ?').get(ctx.user.id));
+  });
+
+  // ---------- 微信小程序 ----------
+  // 小程序端用 wx.login 拿到的 code 换 openid：已绑定直接登录，未绑定按站点设置自动建号
+  r.get('/api/wx/config', null, () => ({
+    enabled: WX.enabled(),
+    allowRegister: getSetting('allow_register', '1') === '1',
+    siteName: getSetting('site_name', 'CodeCamp 少儿编程学堂'),
+  }));
+
+  const wxUsername = () => {
+    for (let i = 0; i < 20; i++) {
+      const name = 'wx_' + crypto.randomBytes(4).toString('hex').slice(0, 7);
+      if (!db.prepare('SELECT 1 FROM users WHERE username = ?').get(name)) return name;
+    }
+    throw new HttpError(500, '生成用户名失败，请重试');
+  };
+
+  r.post('/api/wx/login', null, async (ctx) => {
+    if (!WX.enabled()) throw new HttpError(400, '服务端未配置小程序 AppID / AppSecret');
+    const session = await WX.code2Session(String(ctx.body.code || ''));
+    const bound = db.prepare('SELECT * FROM users WHERE openid = ?').get(session.openid);
+    if (bound) {
+      if (!bound.status) throw new HttpError(403, '账号已被禁用，请联系管理员');
+      return { token: sign({ uid: bound.id, role: bound.role }), user: pub(bound), isNew: false };
+    }
+    if (getSetting('allow_register', '1') !== '1') return { needBind: true };
+    const profile = ctx.body.profile || {};
+    const username = wxUsername();
+    const nickname = String(profile.nickname || '新同学').slice(0, 20);
+    const t = now();
+    const info = db
+      .prepare(
+        'INSERT INTO users (username,password,nickname,role,avatar,bio,class_id,status,created_at,openid,unionid) VALUES (?,?,?,?,?,?,?,1,?,?,?)'
+      )
+      .run(
+        username,
+        // 微信登录账号没有可用密码，随机生成一份，用户可在「我的」里自行修改
+        hashPassword(crypto.randomBytes(12).toString('hex')),
+        nickname,
+        'student',
+        '',
+        '',
+        null,
+        t,
+        session.openid,
+        session.unionid || ''
+      );
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
+    return { token: sign({ uid: user.id, role: user.role }), user: pub(user), isNew: true };
+  });
+
+  // 站点关闭注册时，把微信绑定到已有账号
+  r.post('/api/wx/bind', null, async (ctx) => {
+    if (!WX.enabled()) throw new HttpError(400, '服务端未配置小程序 AppID / AppSecret');
+    const session = await WX.code2Session(String(ctx.body.code || ''));
+    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(String(ctx.body.username || ''));
+    if (!user || !verifyPassword(ctx.body.password, user.password)) throw new HttpError(401, '用户名或密码错误');
+    if (!user.status) throw new HttpError(403, '账号已被禁用，请联系管理员');
+    if (user.openid && user.openid !== session.openid) throw new HttpError(409, '该账号已绑定其他微信');
+    const other = db.prepare('SELECT id,nickname FROM users WHERE openid = ? AND id <> ?').get(session.openid, user.id);
+    if (other) throw new HttpError(409, '当前微信已绑定账号：' + other.nickname);
+    db.prepare('UPDATE users SET openid = ?, unionid = ? WHERE id = ?').run(session.openid, session.unionid || '', user.id);
+    invalidateUser(user.id);
+    const fresh = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+    return { token: sign({ uid: fresh.id, role: fresh.role }), user: pub(fresh) };
+  });
+
+  r.post('/api/wx/unbind', 'any', (ctx) => {
+    db.prepare("UPDATE users SET openid = '', unionid = '' WHERE id = ?").run(ctx.user.id);
+    invalidateUser(ctx.user.id);
+    return { ok: true };
   });
 
   // ---------- 作品 ----------
@@ -255,7 +329,9 @@ function buildApi(r) {
     return { items: rows, total };
   });
 
-  r.post('/api/projects', 'any', (ctx) => {
+  r.post('/api/projects', 'any', async (ctx) => {
+    // UGC 内容安全检测（未配置小程序凭据或 Web 用户时自动跳过）
+    await WX.checkTexts([ctx.body.title, ctx.body.description], ctx.user.openid, WX.SCENE.forum);
     const type = ctx.body.type === 'python' ? 'python' : 'scratch';
     const title = String(ctx.body.title || (type === 'scratch' ? '未命名作品' : '未命名 Python 作品')).slice(0, 40);
     const data =
@@ -308,10 +384,11 @@ function buildApi(r) {
     return p;
   });
 
-  r.patch('/api/projects/:id', 'any', (ctx) => {
+  r.patch('/api/projects/:id', 'any', async (ctx) => {
     const p = db.prepare('SELECT * FROM projects WHERE id = ?').get(Number(ctx.params.id));
     if (!p) throw new HttpError(404, '作品不存在');
     if (p.user_id !== ctx.user.id && ctx.user.role !== 'admin') throw new HttpError(403, '无权修改该作品');
+    await WX.checkTexts([ctx.body.title, ctx.body.description], ctx.user.openid, WX.SCENE.forum);
     const b = ctx.body;
     if (b.title !== undefined) db.prepare('UPDATE projects SET title = ? WHERE id = ?').run(String(b.title).slice(0, 40) || p.title, p.id);
     if (b.description !== undefined) db.prepare('UPDATE projects SET description = ? WHERE id = ?').run(String(b.description).slice(0, 500), p.id);
@@ -405,10 +482,11 @@ function buildApi(r) {
       .all(Number(ctx.params.id));
   });
 
-  r.post('/api/projects/:id/comments', 'any', (ctx) => {
+  r.post('/api/projects/:id/comments', 'any', async (ctx) => {
     const content = String(ctx.body.content || '').trim();
     if (!content) throw new HttpError(400, '评论内容不能为空');
     if (content.length > 300) throw new HttpError(400, '评论过长');
+    await WX.checkTexts([content], ctx.user.openid, WX.SCENE.comment);
     db.prepare('INSERT INTO comments (project_id,user_id,content,created_at) VALUES (?,?,?,?)').run(Number(ctx.params.id), ctx.user.id, content, now());
     return { ok: true };
   });
@@ -914,11 +992,12 @@ function buildApi(r) {
       .all(...args);
   });
 
-  r.post('/api/assignments', ['teacher', 'admin'], (ctx) => {
+  r.post('/api/assignments', ['teacher', 'admin'], async (ctx) => {
     const b = ctx.body;
     const classId = Number(b.classId);
     if (!classId) throw new HttpError(400, '请选择班级');
     if (!b.title) throw new HttpError(400, '请填写作业标题');
+    await WX.checkTexts([b.title, b.description], ctx.user.openid, WX.SCENE.forum);
     const info = db
       .prepare('INSERT INTO assignments (teacher_id,class_id,title,description,type,due_at,starter,created_at) VALUES (?,?,?,?,?,?,?,?)')
       .run(

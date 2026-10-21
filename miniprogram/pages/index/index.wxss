@@ -1,0 +1,33 @@
+.hero {
+  background: var(--surface);
+  padding: 32rpx 28rpx 8rpx;
+  border-bottom: 1rpx solid var(--border);
+}
+.brand-row { display: flex; align-items: center; gap: 20rpx; }
+.logo {
+  width: 88rpx; height: 88rpx; border-radius: 24rpx; flex-shrink: 0;
+  background: var(--ink); color: #fff; font-weight: 700; font-size: 34rpx;
+  display: flex; align-items: center; justify-content: center;
+}
+.hero-stats {
+  margin-top: 28rpx; padding: 24rpx 0 20rpx;
+  border-top: 1rpx solid var(--border);
+}
+.hero-stats .v { font-size: 36rpx; }
+
+.login-bar {
+  display: flex; align-items: center; gap: 16rpx;
+  margin: 24rpx 28rpx 0; padding: 26rpx;
+  background: var(--brand-soft); border: 1rpx solid #dfe3fb; border-radius: var(--radius);
+}
+
+.entries { margin-top: 4rpx; }
+.entry {
+  background: var(--surface); border: 1rpx solid var(--border);
+  border-radius: var(--radius); padding: 26rpx 0; text-align: center;
+}
+.entry:active { background: var(--surface-2); }
+.entry .e-icon { font-size: 44rpx; line-height: 1.2; }
+.entry .e-title { font-size: 24rpx; margin-top: 10rpx; color: var(--text-2); font-weight: 600; }
+
+.more { color: var(--muted); font-size: 24rpx; }

@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "教师工作台",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark",
+  "usingComponents": {
+    "empty": "/components/empty/empty"
+  }
+}

@@ -1,0 +1,136 @@
+<view class="page has-bar">
+  <view wx:if="{{loading}}" class="loading">加载中…</view>
+
+  <empty wx:elif="{{!a}}" icon="📭" text="作业不存在或无权查看" />
+
+  <block wx:else>
+    <view class="head">
+      <view class="row gap-8">
+        <text class="tag {{a.type === 'python' ? 'tag-python' : 'tag-scratch'}}">{{typeText}}</text>
+        <text class="tag tag-warn" wx:if="{{due}}">截止 {{due}}</text>
+        <text class="tag" wx:if="{{a.class_name}}">{{a.class_name}}</text>
+      </view>
+      <view class="title">{{a.title}}</view>
+      <view class="tip">{{a.teacher_name || ''}} 布置</view>
+    </view>
+
+    <view class="wrap">
+      <view class="card">
+        <view class="h3">作业要求</view>
+        <view class="desc">{{a.description || '老师没有填写额外要求，按题目完成即可。'}}</view>
+      </view>
+
+      <!-- 学生：我的提交 -->
+      <block wx:if="{{isStudent}}">
+        <view class="card mt-24">
+          <view class="between">
+            <text class="h3">我的提交</text>
+            <text class="tag {{mySubmission ? (mySubmission.status === 'graded' ? 'tag-ok' : 'tag-warn') : ''}}">
+              {{mySubmission ? mySubmission.statusText : '未提交'}}
+            </text>
+          </view>
+
+          <view class="tip mt-12" wx:if="{{work}}">
+            草稿：{{work.title}} · {{work.updatedAt ? '' : ''}}最近保存
+          </view>
+
+          <view class="score-row" wx:if="{{mySubmission && mySubmission.score !== null && mySubmission.score !== undefined}}">
+            <text class="score">{{mySubmission.score}}</text>
+            <text class="muted">分</text>
+          </view>
+          <view class="feedback" wx:if="{{mySubmission && mySubmission.feedback}}">
+            <view class="muted tip">老师评语</view>
+            <view class="desc">{{mySubmission.feedback}}</view>
+          </view>
+        </view>
+      </block>
+
+      <!-- 教师：提交列表 -->
+      <block wx:else>
+        <view class="card mt-24">
+          <view class="between">
+            <text class="h3">提交情况</text>
+            <text class="muted">{{subs.length}} 份提交</text>
+          </view>
+          <view class="list mt-12" wx:if="{{subs.length}}">
+            <view class="sub" wx:for="{{subs}}" wx:key="id">
+              <view class="avatar avatar-sm avatar-fallback">{{item.initial}}</view>
+              <view class="grow sub-main" data-pid="{{item.project_id}}" bindtap="openStudentWork">
+                <view class="between">
+                  <text class="sub-name">{{item.nickname}}</text>
+                  <text class="tag {{item.status === 'graded' ? 'tag-ok' : 'tag-warn'}}">{{item.statusText}}</text>
+                </view>
+                <view class="tip wrap-text">{{item.project_title || '作品已删除'}} · {{item.time}}</view>
+              </view>
+              <view class="score-badge" wx:if="{{item.score !== null && item.score !== undefined}}">{{item.score}}</view>
+              <view
+                class="btn btn-ghost btn-sm"
+                data-id="{{item.id}}"
+                data-name="{{item.nickname}}"
+                data-score="{{item.score}}"
+                data-feedback="{{item.feedback}}"
+                bindtap="openGrade"
+              >批改</view>
+            </view>
+          </view>
+          <empty wx:else icon="📝" text="还没有同学提交" />
+        </view>
+      </block>
+
+      <view class="safe-bottom"></view>
+    </view>
+
+    <!-- 学生底部操作 -->
+    <view class="footer-bar" wx:if="{{isStudent}}">
+      <button class="btn btn-ghost grow" bindtap="start">{{work ? '继续创作' : '去完成'}}</button>
+      <button class="btn btn-primary grow" bindtap="submitWork" disabled="{{submitting}}">
+        {{mySubmission ? '重新提交' : '提交作业'}}
+      </button>
+    </view>
+
+    <!-- 教师底部操作 -->
+    <view class="footer-bar" wx:if="{{isTeacher}}">
+      <button class="btn btn-ghost grow" bindtap="editAssignment">编辑作业</button>
+      <button class="btn btn-danger grow" bindtap="removeAssignment">删除作业</button>
+    </view>
+  </block>
+
+  <!-- 选择作品弹层 -->
+  <view class="mask" wx:if="{{picker}}" bindtap="closePicker"></view>
+  <view class="sheet" wx:if="{{picker}}">
+    <view class="between mb-16">
+      <text class="h3">选择要提交的作品</text>
+      <text class="muted" bindtap="closePicker">关闭</text>
+    </view>
+    <scroll-view scroll-y class="pick-list">
+      <view class="pick" wx:for="{{myWorks}}" wx:key="id" data-id="{{item.id}}" bindtap="pickWork">
+        <view class="grow">
+          <view class="strong">{{item.title}}</view>
+          <view class="tip">{{item.updated_at ? '' : ''}}{{item.published ? '已发布' : '草稿'}}</view>
+        </view>
+        <text class="list-arrow">›</text>
+      </view>
+      <empty wx:if="{{!myWorks.length}}" icon="🎨" text="还没有作品，先去创作一个吧" />
+    </scroll-view>
+    <view class="safe-bottom"></view>
+  </view>
+
+  <!-- 评分弹层 -->
+  <view class="mask" wx:if="{{grading}}" bindtap="closeGrade"></view>
+  <view class="sheet" wx:if="{{grading}}">
+    <view class="between mb-24">
+      <text class="h3">批改 · {{gradeTarget.name}}</text>
+      <text class="muted" bindtap="closeGrade">关闭</text>
+    </view>
+    <view class="field">
+      <text class="label">分数（0-100，可留空）</text>
+      <input class="input" type="number" value="{{gradeForm.score}}" data-k="score" bindinput="onGradeInput" placeholder="例如 90" placeholder-class="placeholder" />
+    </view>
+    <view class="field">
+      <text class="label">评语</text>
+      <textarea class="textarea" value="{{gradeForm.feedback}}" data-k="feedback" bindinput="onGradeInput" maxlength="1000" placeholder="给孩子一些具体的建议" placeholder-class="placeholder" />
+    </view>
+    <button class="btn btn-primary btn-block" bindtap="saveGrade">保存评分</button>
+    <view class="safe-bottom"></view>
+  </view>
+</view>
