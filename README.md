@@ -60,7 +60,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 ```
 ================================================
-  CodeCamp v1.2.0  管理菜单
+  CodeCamp v1.3.0  管理菜单
 ------------------------------------------------
   状态   运行中（PID 14496）
   地址   http://127.0.0.1:3000
@@ -159,12 +159,12 @@ curl -fsSL https://raw.githubusercontent.com/tuohai24/codecamp/main/install.sh |
 
 `update` 做了什么：
 
-1. **先探测**：git 安装只做 `fetch`，远端没有新提交就直接结束——服务完全不断，输出「代码已是最新（v1.2.0 · 3f9c2a1），服务未中断」。
+1. **先探测**：git 安装只做 `fetch`，远端没有新提交就直接结束——服务完全不断，输出「代码已是最新（v1.3.0 · 3f9c2a1），服务未中断」。
 2. **停服务 + 备份数据库**到 `data/backups/<时间戳>/`（自动只留最近 5 份）。
 3. **换代码**：git 安装走 `pull --ff-only`；压缩包安装（没有 `.git`）自动下载最新源码包，逐文件比对后覆盖，`data/`、`.runtime/` 永远不动。
 4. **重启并自检**：等端口真正响应才算成功，失败会打印日志末尾并提示备份位置；数据库结构变更在启动时自动迁移。
 
-版本号会一起打印出来，例如 `发现新版本：v1.1.1 → v1.2.0`、`版本：v1.1.1 → v1.2.0`。
+版本号会一起打印出来，例如 `发现新版本：v1.2.0 → v1.3.0`、`版本：v1.2.0 → v1.3.0`。
 确认线上跑的是哪一版有三种方式：首页页脚、管理员后台「系统状态 → 当前版本」、`./install.sh status` 的第一行。
 
 常见情况：
@@ -322,6 +322,7 @@ sudo systemctl daemon-reload && sudo systemctl enable --now codecamp
 - **切换入口**：站点头部右侧的 🖥 / ☀️ / 🌙 按钮，点一下在「跟随系统 → 浅色 → 深色」之间轮换，选择记在 `localStorage.cc_theme`。
 - **不闪白**：`<head>` 里有一段同步内联脚本，在样式表生效前就按 `localStorage` + `prefers-color-scheme` 写好 `data-theme`，所以深色下刷新不会先闪一下白屏。
 - **实现**：只有一套 CSS 变量（`--bg / --surface / --text / --border / --hover / --brand-soft / --code-bg` …），`[data-theme='dark']` 覆盖同名变量，组件不写死颜色；`theme-color` 也随主题同步，手机地址栏颜色跟着变。
+- **设计语言（v1.3 起）**：中性灰阶（zinc）做骨架，只留一个靛蓝 `#4f46e5` 作点缀，主按钮改为墨黑/深色反白（`--ink` / `--ink-text` / `--ink-hover`）；统一 14px 圆角、细边框、浅阴影、60px 顶栏，去掉彩色渐变与重投影。
 - **系统主题运行中变化**：`matchMedia('(prefers-color-scheme: dark)')` 监听 change 事件，处于「跟随系统」时自动重绘，不用刷新。
 
 ---

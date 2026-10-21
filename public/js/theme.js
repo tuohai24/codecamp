@@ -31,7 +31,7 @@ export function applyMode(mode) {
   const resolved = resolveMode(mode);
   document.documentElement.setAttribute('data-theme', resolved);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', resolved === 'dark' ? '#0e1016' : '#5b5bd6');
+  if (meta) meta.setAttribute('content', resolved === 'dark' ? '#0b0b0d' : '#fafafa');
   syncButtons(mode);
   return resolved;
 }

@@ -10,7 +10,7 @@ export async function render(root, { query }) {
     <div class="auth-wrap">
       <div class="auth-card">
         <div class="row" style="gap:10px;margin-bottom:16px">
-          <div class="logo" style="width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff;font-weight:800">CC</div>
+          <div class="logo" style="width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--ink);color:var(--ink-text);font-weight:700">CC</div>
           <div>
             <h1>${mode === 'login' ? '登录账号' : '注册新账号'}</h1>
             <div class="tip" style="margin:0">${esc(site.name || 'CodeCamp 少儿编程学堂')}</div>
